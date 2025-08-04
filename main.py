@@ -1,10 +1,11 @@
-# main.py (Koyeb対応版)
+# main.py (Koyeb無料プラン対応版)
 
 import os
 import re
 import logging
 import time
 from datetime import datetime, timedelta
+from threading import Thread
 
 import discord
 from flask import Flask
@@ -14,7 +15,7 @@ NUMBER_EMOJIS = ["1️⃣", "2️⃣", "3️⃣", "4️⃣", "5️⃣", "6️⃣
 REACTION_EMOJIS = ["⭕", "❌", "🔺"]
 WEEKDAYS_JP = ["月", "火", "水", "木", "金", "土", "日"]
 TOKEN = os.getenv('DISCORD_TOKEN')
-PROCESS_TYPE = os.getenv('PROCESS_TYPE', 'all') # 環境変数でプロセスの種類を判別
+PORT = int(os.getenv('PORT', 8080)) # KoyebはPORT環境変数を設定してくれる
 
 # --- ロギング設定 ---
 logging.basicConfig(level=logging.INFO, format='%(asctime)s:%(levelname)s:%(name)s: %(message)s')
@@ -24,7 +25,14 @@ app = Flask(__name__)
 
 @app.route('/')
 def home():
-    return "Web server is alive!"
+    # UptimeRobotからのアクセス時にログを出力して確認しやすくする
+    logging.info("Web server received a request.")
+    return "I am alive!"
+
+def run_web_server():
+    # gunicornではなくFlask標準サーバーを使う
+    # host='0.0.0.0' で外部からのアクセスを許可する
+    app.run(host='0.0.0.0', port=PORT)
 
 # --- Discordボットの定義 ---
 def run_bot():
@@ -49,14 +57,15 @@ def run_bot():
                 if message.author == client.user or not client.user.mentioned_in(message):
                     return
 
-                pattern = f'<@!?{client.user.id}>\s*(.*)'
+                # raw文字列(r'...')を使い、SyntaxWarningを抑制
+                pattern = rf'<@!?{client.user.id}>\s*(.*)'
                 match = re.search(pattern, message.content, re.DOTALL)
                 if not match:
                     return
 
                 command_text = match.group(1).strip()
 
-                # (ここに各コマンドのロジックが来る... コピペでOK)
+                # (ここに各コマンドのロジックが来る... 変更なし)
                 date_match = re.fullmatch(r'(\d{1,2})/(\d{1,2})', command_text)
                 if date_match:
                     try:
@@ -102,15 +111,11 @@ def run_bot():
             logging.info("10秒後に再起動します。")
             time.sleep(10)
 
-# --- 起動プロセスの分岐 ---
+# --- メインの実行ブロック ---
 if __name__ == '__main__':
-    if PROCESS_TYPE == 'worker':
-        logging.info("起動モード: Worker (Discordボットのみ)")
-        run_bot()
-    elif PROCESS_TYPE == 'web':
-        # この部分は 'gunicorn' が直接実行するため、実際には使われない
-        logging.info("起動モード: Web (このメッセージはローカル実行時のみ表示)")
-    else: # ローカルでのテスト用
-        logging.info("起動モード: all (WebとBotの両方)")
-        # threading は使わず、ここではボットのみを起動
-        run_bot()
+    # Webサーバーを別スレッドで起動
+    web_thread = Thread(target=run_web_server)
+    web_thread.start()
+    
+    # メインスレッドでDiscordボットを起動
+    run_bot()
