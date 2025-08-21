@@ -49,7 +49,7 @@ def run_bot():
             # --- 定期実行タスクの定義 ---
             # 日本時間 (JST, UTC+9) の15:15を指定
             JST = timezone(timedelta(hours=9), 'JST')
-            scheduled_time = time(hour=15, minute=15, tzinfo=JST)
+            scheduled_time = time(hour=15, minute=35, tzinfo=JST)
 
             @tasks.loop(time=scheduled_time)
             async def send_weekly_schedule():
@@ -65,7 +65,7 @@ def run_bot():
 
                 # 送信先のチャンネル名とメンションするロール名
                 CHANNEL_NAME = "test"
-                ROLE_NAME = "meteor"
+                ROLE_NAME = "stampbot"
 
                 # ボットが参加している全てのサーバーをループ
                 for guild in client.guilds:
