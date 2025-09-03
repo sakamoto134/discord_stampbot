@@ -57,7 +57,7 @@ def run_bot():
                 # ボットが完全に起動するまで待機
                 await client.wait_until_ready()
 
-                # 実行日が木曜日(weekday()==3)でなければ処理を中断
+                # 実行日が水曜日(weekday()==2)でなければ処理を中断
                 if datetime.now(JST).weekday() != 2:
                     return
 
@@ -87,7 +87,7 @@ def run_bot():
                             await channel.send(message_text)
 
                             # 翌週(月曜日)から1週間分の日付を投稿
-                            start_date = datetime.now(JST).date() + timedelta(days=4)
+                            start_date = datetime.now(JST).date() + timedelta(days=5)
                             for i in range(7):
                                 current_date = start_date + timedelta(days=i)
                                 date_text = f"{current_date.month}/{current_date.day}({WEEKDAYS_JP[current_date.weekday()]})"
