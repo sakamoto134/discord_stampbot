@@ -27,7 +27,7 @@ SOURCE_CHANNEL_NAME = "未耐久"
 
 # --- ▼▼▼【重要】設定してください ▼▼▼ ---
 # アーカイブ処理のトリガーとなるロール名 (大文字・小文字を区別します)
-TRIGGER_ROLE_NAME = "ClashKing"
+TRIGGER_ROLE_NAME = "player"
 # --- ▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲ ---
 
 
