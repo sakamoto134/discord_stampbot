@@ -2,11 +2,11 @@ import os
 import re
 import logging
 import time
-from datetime import datetime, timedelta, time, timezone # --- 変更 ---
+from datetime import datetime, timedelta, time, timezone
 from threading import Thread
 
 import discord
-from discord.ext import tasks # --- ▼▼▼ ここから追加 ▼▼▼ ---
+from discord.ext import tasks
 from flask import Flask
 
 # --- 定数 ---
@@ -44,10 +44,8 @@ def run_bot():
             intents.message_content = True
             client = discord.Client(intents=intents, max_messages=None)
 
-            # --- ▼▼▼ ここから追加 ▼▼▼ ---
-
             # --- 定期実行タスクの定義 ---
-            # 日本時間 (JST, UTC+9) の15:15を指定
+            # 日本時間 (JST, UTC+9) の20:00を指定
             JST = timezone(timedelta(hours=9), 'JST')
             scheduled_time = time(hour=20, minute=00, tzinfo=JST)
 
@@ -64,26 +62,39 @@ def run_bot():
                 logging.info("定期実行タスク: 週間予定の投稿を開始します。")
 
                 # 送信先のチャンネル名とメンションするロール名
-                CHANNEL_NAME = "calendar"
-                ROLE_NAME = "player"
+                CHANNEL_NAME = "attendance"
+                # --- ▼▼▼ 変更 ▼▼▼ ---
+                # メンションしたいロール名をリストで指定
+                ROLE_NAMES = ["player", "guest"]
+                # --- ▲▲▲ 変更 ▲▲▲ ---
 
                 # ボットが参加している全てのサーバーをループ
                 for guild in client.guilds:
-                    # チャンネルとロールを名前で検索
+                    # チャンネルを名前で検索
                     channel = discord.utils.get(guild.text_channels, name=CHANNEL_NAME)
-                    role = discord.utils.get(guild.roles, name=ROLE_NAME)
 
-                    # チャンネルとロールの両方が見つかった場合のみ処理を実行
-                    if channel and role:
+                    # --- ▼▼▼ 変更 ▼▼▼ ---
+                    # リストにあるロールをすべて取得し、見つかったものだけをリスト化
+                    roles_to_mention = [discord.utils.get(guild.roles, name=name) for name in ROLE_NAMES]
+                    found_roles = [role for role in roles_to_mention if role is not None]
+                    # --- ▲▲▲ 変更 ▲▲▲ ---
+
+                    # --- ▼▼▼ 変更 ▼▼▼ ---
+                    # チャンネルと、メンション対象のロールが1つ以上見つかった場合のみ処理を実行
+                    if channel and found_roles:
+                    # --- ▲▲▲ 変更 ▲▲▲ ---
                         try:
                             logging.info(f"サーバー'{guild.name}'のチャンネル'{channel.name}'にメッセージを送信します。")
 
-                            # 投稿するメッセージを作成
+                            # --- ▼▼▼ 変更 ▼▼▼ ---
+                            # 見つかったすべてのロールに対してメンションを作成
+                            mentions = " ".join(role.mention for role in found_roles)
                             message_text = (
-                                f"【出欠投票】 {role.mention}\n"
+                                f"【出欠投票】 {mentions}\n"
                                 "21:00~25:00辺りに可能なら投票\n"
                                 "（細かい時間の可否は各自連絡）"
                             )
+                            # --- ▲▲▲ 変更 ▲▲▲ ---
                             await channel.send(message_text)
 
                             # 翌週(月曜日)から1週間分の日付を投稿
@@ -101,20 +112,18 @@ def run_bot():
                         except Exception as e:
                             logging.error(f"定期タスク実行中に予期せぬエラーが発生: {e}", exc_info=True)
                     
-                    # デバッグ用のログ（ロールが見つからなかった場合など）
-                    elif channel and not role:
-                        logging.warning(f"サーバー'{guild.name}'でチャンネル'{CHANNEL_NAME}'は見つかりましたが、ロール'{ROLE_NAME}'が見つかりませんでした。")
-
-            # --- ▲▲▲ ここまで追加 ▲▲▲ ---
+                    # --- ▼▼▼ 変更 ▼▼▼ ---
+                    # デバッグ用のログ（ロールが一つも見つからなかった場合など）
+                    elif channel and not found_roles:
+                        logging.warning(f"サーバー'{guild.name}'でチャンネル'{CHANNEL_NAME}'は見つかりましたが、ロール'{', '.join(ROLE_NAMES)}'のいずれも見つかりませんでした。")
+                    # --- ▲▲▲ 変更 ▲▲▲ ---
 
             @client.event
             async def on_ready():
                 logging.info(f'{client.user.name} が起動しました！')
-                # --- ▼▼▼ ここから追加 ▼▼▼ ---
                 # 定期実行タスクを開始
                 if not send_weekly_schedule.is_running():
                     send_weekly_schedule.start()
-                # --- ▲▲▲ ここまで追加 ▲▲▲ ---
 
             @client.event
             async def on_message(message):
