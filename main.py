@@ -54,92 +54,13 @@ def run_bot():
             intents.messages = True
             intents.message_content = True 
             intents.guilds = True
-            intents.guild_messages = True
-            intents.message_content = True
-            client = discord.Client(intents=intents, max_messages=None)
-
-            # --- 定期実行タスクの定義 ---
-            # 日本時間 (JST, UTC+9) の20:00を指定
-            JST = timezone(timedelta(hours=9), 'JST')
-            scheduled_time = time(hour=20, minute=00, tzinfo=JST)
-
-            @tasks.loop(time=scheduled_time)
-            async def send_weekly_schedule():
-                """毎週水曜日の20:00に週間予定を投稿するタスク"""
-                # ボットが完全に起動するまで待機
-                await client.wait_until_ready()
-
-                # 実行日が水曜日(weekday()==2)でなければ処理を中断
-                if datetime.now(JST).weekday() != 2:
-                    return
-
-                logging.info("定期実行タスク: 週間予定の投稿を開始します。")
-
-                # 送信先のチャンネル名とメンションするロール名
-                CHANNEL_NAME = "attendance"
-                # --- ▼▼▼ 変更 ▼▼▼ ---
-                # メンションしたいロール名をリストで指定
-                ROLE_NAMES = ["player", "guest"]
-                # --- ▲▲▲ 変更 ▲▲▲ ---
-
-                # ボットが参加している全てのサーバーをループ
-                for guild in client.guilds:
-                    # チャンネルを名前で検索
-                    channel = discord.utils.get(guild.text_channels, name=CHANNEL_NAME)
-
-                    # --- ▼▼▼ 変更 ▼▼▼ ---
-                    # リストにあるロールをすべて取得し、見つかったものだけをリスト化
-                    roles_to_mention = [discord.utils.get(guild.roles, name=name) for name in ROLE_NAMES]
-                    found_roles = [role for role in roles_to_mention if role is not None]
-                    # --- ▲▲▲ 変更 ▲▲▲ ---
-
-                    # --- ▼▼▼ 変更 ▼▼▼ ---
-                    # チャンネルと、メンション対象のロールが1つ以上見つかった場合のみ処理を実行
-                    if channel and found_roles:
-                    # --- ▲▲▲ 変更 ▲▲▲ ---
-                        try:
-                            logging.info(f"サーバー'{guild.name}'のチャンネル'{channel.name}'にメッセージを送信します。")
-
-                            # --- ▼▼▼ 変更 ▼▼▼ ---
-                            # 見つかったすべてのロールに対してメンションを作成
-                            mentions = " ".join(role.mention for role in found_roles)
-                            message_text = (
-                                f"【出欠投票】 {mentions}\n"
-                                "21:00~25:00辺りに可能なら投票\n"
-                                "（細かい時間の可否は各自連絡）"
-                            )
-                            # --- ▲▲▲ 変更 ▲▲▲ ---
-                            await channel.send(message_text)
-
-                            # 翌週(月曜日)から1週間分の日付を投稿
-                            start_date = datetime.now(JST).date() + timedelta(days=5)
-                            for i in range(7):
-                                current_date = start_date + timedelta(days=i)
-                                date_text = f"{current_date.month}/{current_date.day}({WEEKDAYS_JP[current_date.weekday()]})"
-                                sent_message = await channel.send(date_text)
-                                for emoji in REACTION_EMOJIS:
-                                    await sent_message.add_reaction(emoji)
-                            logging.info(f"サーバー'{guild.name}'への週間予定の投稿が完了しました。")
-
-                        except discord.errors.Forbidden:
-                            logging.error(f"エラー: チャンネル'{channel.name}'への投稿権限がありません。")
-                        except Exception as e:
-                            logging.error(f"定期タスク実行中に予期せぬエラーが発生: {e}", exc_info=True)
-                    
-                    # --- ▼▼▼ 変更 ▼▼▼ ---
-                    # デバッグ用のログ（ロールが一つも見つからなかった場合など）
-                    elif channel and not found_roles:
-                        logging.warning(f"サーバー'{guild.name}'でチャンネル'{CHANNEL_NAME}'は見つかりましたが、ロール'{', '.join(ROLE_NAMES)}'のいずれも見つかりませんでした。")
-                    # --- ▲▲▲ 変更 ▲▲▲ ---
+            client = discord.Client(intents=intents)
 
             # (定期実行タスクは変更なし)
             
             @client.event
             async def on_ready():
                 logging.info(f'{client.user.name} が起動しました！')
-                # 定期実行タスクを開始
-                if not send_weekly_schedule.is_running():
-                    send_weekly_schedule.start()
 
             # --- ▼▼▼ 変更点: アーカイブ処理のトリガーをロールに変更 ▼▼▼ ---
             @client.event
