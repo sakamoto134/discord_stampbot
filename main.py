@@ -16,16 +16,18 @@ WEEKDAYS_JP = ["月", "火", "水", "木", "金", "土", "日"]
 TOKEN = os.getenv('DISCORD_TOKEN')
 PORT = int(os.getenv('PORT', 8080)) # KoyebはPORT環境変数を設定してくれる
 
-# --- ▼▼▼ 新機能のための定数を追加 ▼▼▼ ---
-# ご利用のseshボットのユーザーIDを設定してください。
-# Discordで「設定」>「詳細設定」から「開発者モード」を有効にし、
-# サーバー内でseshボットのアイコンを右クリックして「IDをコピー」で取得できます。
-SESH_BOT_ID = 616754792965865495 # (これは公式seshのIDです。必要に応じて変更してください)
+# --- ▼▼▼ 新機能のための定数 ▼▼▼ ---
+# ご利用のseshボットのユーザーID
+# Discordで「開発者モード」を有効にし、seshボットを右クリックして「IDをコピー」で取得
+SESH_BOT_ID = 315577333958443020 # (これは公式seshのIDです。必要に応じて変更してください)
 # seshボットのコマンドを監視するチャンネル名
 TARGET_SESH_CHANNEL_NAME = "sesh⚙️"
 # seshのイベント作成時にメンションするロール名のリスト
 MENTION_ROLES_FOR_SESH = ["test"]
-# --- ▲▲▲ 新機能のための定数を追加 ▲▲▲ ---
+# 【重要】seshの/listコマンドのIDを設定してください。
+# サーバー設定 > 連携サービス > sesh > /list を右クリックして「IDをコピー」で取得できます。
+SESH_LIST_COMMAND_ID = 950770720303091726 # ★★★★★ ここにあなたの取得したコマンドIDを貼り付けてください ★★★★★
+# --- ▲▲▲ 新機能のための定数 ▲▲▲ ---
 
 # --- ロギング設定 ---
 logging.basicConfig(level=logging.INFO, format='%(asctime)s:%(levelname)s:%(name)s: %(message)s')
@@ -56,40 +58,27 @@ def run_bot():
             client = discord.Client(intents=intents, max_messages=None)
 
             # --- 定期実行タスクの定義 ---
-            # 日本時間 (JST, UTC+9) の20:00を指定
             JST = timezone(timedelta(hours=9), 'JST')
             scheduled_time = time(hour=20, minute=00, tzinfo=JST)
 
             @tasks.loop(time=scheduled_time)
             async def send_weekly_schedule():
-                """毎週水曜日の20:00に週間予定を投稿するタスク"""
-                # ボットが完全に起動するまで待機
                 await client.wait_until_ready()
-
-                # 実行日が水曜日(weekday()==2)でなければ処理を中断
                 if datetime.now(JST).weekday() != 2:
                     return
 
                 logging.info("定期実行タスク: 週間予定の投稿を開始します。")
-
-                # 送信先のチャンネル名とメンションするロール名
                 CHANNEL_NAME = "attendance"
                 ROLE_NAMES = ["player", "guest"]
 
-                # ボットが参加している全てのサーバーをループ
                 for guild in client.guilds:
-                    # チャンネルを名前で検索
                     channel = discord.utils.get(guild.text_channels, name=CHANNEL_NAME)
-                    # リストにあるロールをすべて取得し、見つかったものだけをリスト化
                     roles_to_mention = [discord.utils.get(guild.roles, name=name) for name in ROLE_NAMES]
                     found_roles = [role for role in roles_to_mention if role is not None]
 
-                    # チャンネルと、メンション対象のロールが1つ以上見つかった場合のみ処理を実行
                     if channel and found_roles:
                         try:
                             logging.info(f"サーバー'{guild.name}'のチャンネル'{channel.name}'にメッセージを送信します。")
-
-                            # 見つかったすべてのロールに対してメンションを作成
                             mentions = " ".join(role.mention for role in found_roles)
                             message_text = (
                                 f"【出欠投票】 {mentions}\n"
@@ -98,7 +87,6 @@ def run_bot():
                             )
                             await channel.send(message_text)
 
-                            # 翌週(月曜日)から1週間分の日付を投稿
                             start_date = datetime.now(JST).date() + timedelta(days=5)
                             for i in range(7):
                                 current_date = start_date + timedelta(days=i)
@@ -119,45 +107,42 @@ def run_bot():
             @client.event
             async def on_ready():
                 logging.info(f'{client.user.name} が起動しました！')
-                # 定期実行タスクを開始
                 if not send_weekly_schedule.is_running():
                     send_weekly_schedule.start()
 
             @client.event
             async def on_message(message):
-                # 自分自身のメッセージは無視
                 if message.author == client.user:
                     return
 
-                # --- ▼▼▼ 新機能：seshのcreateコマンドに応答するロジック ▼▼▼ ---
-                # 以下の条件をすべて満たした場合に実行
-                # 1. チャンネル名が定数で指定した名前と一致する
-                # 2. メッセージの投稿者がseshボットである
-                # 3. メッセージがユーザーのスラッシュコマンド(/create)への応答である
-                # 4. コマンドを実行したのが他のボットではない
+                # --- ▼▼▼ 新機能：seshのcreateコマンドに応答するロジック (修正版) ▼▼▼ ---
                 if (message.channel.name == TARGET_SESH_CHANNEL_NAME and
                     message.author.id == SESH_BOT_ID and
                     message.interaction is not None and
                     message.interaction.name == 'create' and
                     not message.interaction.user.bot):
 
+                    # SESH_LIST_COMMAND_IDが設定されているかチェック
+                    if SESH_LIST_COMMAND_ID == 0:
+                        logging.error("エラー: SESH_LIST_COMMAND_ID が設定されていません。コードを修正してください。")
+                        await message.channel.send("（ボット管理者向けエラー: `SESH_LIST_COMMAND_ID`が設定されていません）")
+                        return
+
                     logging.info(f"seshのcreateコマンド応答を'{message.channel.name}'チャンネルで検知しました。")
                     try:
-                        # /list コマンドを自動で実行
-                        await message.channel.send("/list")
-                        logging.info("'/list' コマンドを送信しました。")
-
-                        # ロールオブジェクトを取得
                         guild = message.guild
                         roles_to_mention = [discord.utils.get(guild.roles, name=name) for name in MENTION_ROLES_FOR_SESH]
                         found_roles = [role for role in roles_to_mention if role is not None]
 
                         if found_roles:
-                            # メンション文字列を作成
                             mentions = " ".join(role.mention for role in found_roles)
-                            # メンションのみのメッセージを送信
-                            await message.channel.send(mentions)
-                            logging.info(f"メンションを送信しました: {mentions}")
+                            
+                            # クリック可能なコマンドを含むメッセージを作成
+                            clickable_command = f"</list:{SESH_LIST_COMMAND_ID}>"
+                            response_message = f"{mentions}\n新しいイベントが作成されました。最新の予定一覧はこちらをクリックして確認できます: {clickable_command}"
+                            
+                            await message.channel.send(response_message)
+                            logging.info(f"メンションとクリック可能なコマンドを送信しました: {response_message}")
                         else:
                             logging.warning(f"サーバー'{guild.name}'で、メンション対象のロール'{', '.join(MENTION_ROLES_FOR_SESH)}'が見つかりませんでした。")
 
@@ -166,9 +151,8 @@ def run_bot():
                     except Exception as e:
                         logging.error(f"sesh連携機能の実行中に予期せぬエラーが発生: {e}", exc_info=True)
                     
-                    # sesh連携の処理が終わったら、以降の処理は不要なのでここで終了
                     return
-                # --- ▲▲▲ 新機能：seshのcreateコマンドに応答するロジック ▲▲▲ ---
+                # --- ▲▲▲ 新機能ロジックここまで ▲▲▲ ---
 
                 # --- 既存の機能：ボットへのメンションに反応するロジック ---
                 if not client.user.mentioned_in(message):
@@ -181,16 +165,13 @@ def run_bot():
 
                 command_text = match.group(1).strip()
 
-                # 日付コマンドの処理 ("M/D" または "M/D day:N")
                 date_pattern = r'(\d{1,2})/(\d{1,2})(?:\s+day:(\d+))?'
                 date_match = re.fullmatch(date_pattern, command_text, re.IGNORECASE)
 
                 if date_match:
                     try:
-                        month_str = date_match.group(1)
-                        day_str = date_match.group(2)
+                        month_str, day_str = date_match.group(1), date_match.group(2)
                         date_str = f"{month_str}/{day_str}"
-
                         days_str = date_match.group(3)
                         days_to_show = int(days_str) if days_str else 7
 
@@ -214,7 +195,6 @@ def run_bot():
                         await message.channel.send(f"コマンドの形式が正しくありません: `{command_text}`")
                         return
 
-                # 数字リアクションコマンド
                 num_match = re.fullmatch(r'num:(\d+)', command_text, re.IGNORECASE)
                 if num_match:
                     try:
@@ -228,7 +208,6 @@ def run_bot():
                     except (ValueError, IndexError):
                         pass
 
-                # デフォルトのリアクション
                 if command_text == "":
                     for emoji in REACTION_EMOJIS:
                         await message.add_reaction(emoji)
