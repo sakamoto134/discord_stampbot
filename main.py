@@ -16,16 +16,17 @@ WEEKDAYS_JP = ["月", "火", "水", "木", "金", "土", "日"]
 TOKEN = os.getenv('DISCORD_TOKEN')
 PORT = int(os.getenv('PORT', 8080)) # KoyebはPORT環境変数を設定してくれる
 
-# --- ▼▼▼ 新機能のための定数を追加 ▼▼▼ ---
-# ご利用のseshボットのユーザーIDを設定してください。
-# Discordで「設定」>「詳細設定」から「開発者モード」を有効にし、
-# サーバー内でseshボットのアイコンを右クリックして「IDをコピー」で取得できます。
+# --- ▼▼▼ sesh連携機能のための定数を追加 ▼▼▼ ---
 SESH_BOT_ID = 616754792965865495 # (これは公式seshのIDです。必要に応じて変更してください)
-# seshボットのコマンドを監視するチャンネル名
 TARGET_SESH_CHANNEL_NAME = "sesh⚙️"
-# seshのイベント作成時にメンションするロール名のリスト
 MENTION_ROLES_FOR_SESH = ["sesh"]
-# --- ▲▲▲ 新機能のための定数を追加 ▲▲▲ ---
+# --- ▲▲▲ sesh連携機能のための定数を追加 ▲▲▲ ---
+
+# --- ▼▼▼ /baseコマンド連携機能のための定数を追加 ▼▼▼ ---
+TARGET_BOT_ID_FOR_BASE = 824653933347209227
+TARGET_CHANNEL_NAME_FOR_BASE = "未耐久"
+TARGET_COMMAND_NAME_FOR_BASE = "base"
+# --- ▲▲▲ /baseコマンド連携機能のための定数を追加 ▲▲▲ ---
 
 # --- ロギング設定 ---
 logging.basicConfig(level=logging.INFO, format='%(asctime)s:%(levelname)s:%(name)s: %(message)s')
@@ -165,6 +166,71 @@ def run_bot():
                     # sesh連携の処理が終わったら、以降の処理は不要なのでここで終了
                     return
                 # --- ▲▲▲ 新機能：seshのcreateコマンドに応答するロジック ▲▲▲ ---
+
+                # --- ▼▼▼ 新機能：未耐久チャンネルで/baseコマンドに応答するロジック ▼▼▼ ---
+                # 以下の条件をすべて満たした場合に実行
+                if (message.channel.name == TARGET_CHANNEL_NAME_FOR_BASE and
+                    message.author.id == TARGET_BOT_ID_FOR_BASE and
+                    message.interaction is not None and
+                    message.interaction.name == TARGET_COMMAND_NAME_FOR_BASE and
+                    not message.interaction.user.bot):
+
+                    logging.info(f"'/base'コマンド応答を'{message.channel.name}'チャンネルで検知しました。")
+                    try:
+                        guild = message.guild
+                        # コマンドが使用された日時を日本時間で取得
+                        command_time = message.created_at.astimezone(JST)
+
+                        # 1. 月のカテゴリーを作成または取得
+                        # 月の英語名フル（例: "october"）をカテゴリー名にする
+                        category_name = command_time.strftime('%B').lower()
+                        category = discord.utils.get(guild.categories, name=category_name)
+
+                        if category is None:
+                            logging.info(f"カテゴリー '{category_name}' が見つからないため、新規作成します。")
+                            category = await guild.create_category(category_name)
+                            logging.info(f"カテゴリー '{category_name}' を作成しました。")
+                        else:
+                            logging.info(f"既存のカテゴリー '{category_name}' を使用します。")
+
+                        # 2. 新しいチャンネルの連番を決定
+                        # 月の英語名短縮形（例: "oct"）をプレフィックスにする
+                        channel_prefix = command_time.strftime('%b').lower()
+                        max_number = 0
+
+                        # カテゴリー内の既存チャンネルをチェックして最大番号を取得
+                        for ch in category.text_channels:
+                            # 正規表現で "プレフィックス" + "数字" のパターンにマッチするか確認
+                            # (例: "oct1", "oct2:eye:", "oct10" などにマッチ)
+                            match = re.match(rf'^{re.escape(channel_prefix)}(\d+)', ch.name, re.IGNORECASE)
+                            if match:
+                                number = int(match.group(1))
+                                if number > max_number:
+                                    max_number = number
+
+                        next_number = max_number + 1
+                        new_channel_name = f"{channel_prefix}{next_number}"
+                        logging.info(f"新しいチャンネル名: {new_channel_name}")
+
+                        # 3. チャンネルを作成
+                        new_channel = await guild.create_text_channel(
+                            new_channel_name,
+                            category=category
+                        )
+                        logging.info(f"チャンネル '{new_channel.name}' をカテゴリー '{category.name}' 内に作成しました。")
+
+                        # 4. 応答メッセージをコピーして貼り付け (テキストとEmbedの両方に対応)
+                        await new_channel.send(content=message.content, embeds=message.embeds)
+                        logging.info(f"'{new_channel.name}' にメッセージをコピーしました。")
+
+                    except discord.errors.Forbidden:
+                        logging.error(f"エラー: サーバー '{message.guild.name}' でカテゴリーまたはチャンネルの作成、あるいはメッセージの送信に必要な権限がありません。")
+                    except Exception as e:
+                        logging.error(f"/base連携機能の実行中に予期せぬエラーが発生: {e}", exc_info=True)
+                    
+                    # この機能の処理が終わったら、以降の処理は不要なのでここで終了
+                    return
+                # --- ▲▲▲ 新機能：未耐久チャンネルで/baseコマンドに応答するロジック ▲▲▲ ---
 
                 # --- 既存の機能：ボットへのメンションに反応するロジック ---
                 if not client.user.mentioned_in(message):
