@@ -139,6 +139,8 @@ def run_bot():
                     try:
                         guild = message.guild
                         command_time = message.created_at.astimezone(JST)
+
+                        # 1. 月のカテゴリーを作成または取得
                         category_name = command_time.strftime('%B').lower()
                         category = discord.utils.get(guild.categories, name=category_name)
                         if category is None:
@@ -147,7 +149,8 @@ def run_bot():
                             logging.info(f"カテゴリー '{category_name}' を作成しました。")
                         else:
                             logging.info(f"既存のカテゴリー '{category_name}' を使用します。")
-                        
+
+                        # 2. 新しいチャンネルの連番を決定
                         channel_prefix = command_time.strftime('%b').lower()
                         max_number = 0
                         for ch in category.text_channels:
@@ -156,30 +159,32 @@ def run_bot():
                                 number = int(match.group(1))
                                 if number > max_number:
                                     max_number = number
-                        
                         next_number = max_number + 1
                         new_channel_name = f"{channel_prefix}{next_number}"
                         logging.info(f"新しいチャンネル名: {new_channel_name}")
-                        
-                        new_channel = await guild.create_text_channel(
-                            new_channel_name,
-                            category=category
-                        )
+
+                        # 3. チャンネルを作成
+                        new_channel = await guild.create_text_channel(new_channel_name, category=category)
                         logging.info(f"チャンネル '{new_channel.name}' をカテゴリー '{category.name}' 内に作成しました。")
                         
-                        # --- ▼▼▼ メッセージコピー部分を修正 ▼▼▼ ---
-                        # 4. 応答メッセージをコピーして貼り付け
-                        # まずテキスト部分があれば送信
-                        if message.content:
-                            await new_channel.send(content=message.content)
+                        # ▼▼▼ 変更箇所 ▼▼▼
+                        # 4. 応答メッセージのリンクを貼り付け、内容を転送する
+                        # on_messageイベントで取得したmessageオブジェクトでは内容が不完全な場合があるため、
+                        # fetch_messageでメッセージを再取得して完全な情報を得る
+                        logging.info(f"メッセージID {message.id} の内容を再取得します。")
+                        original_message = await message.channel.fetch_message(message.id)
 
-                        # 次に埋め込みメッセージがあれば、1つずつ送信
-                        if message.embeds:
-                            for embed in message.embeds:
-                                await new_channel.send(embed=embed)
+                        # 転送用のメッセージを作成 (元のメッセージへのリンクを含む)
+                        forward_content = f"元のメッセージ: {original_message.jump_url}"
                         
-                        logging.info(f"'{new_channel.name}' にメッセージをコピーしました。")
-                        # --- ▲▲▲ メッセージコピー部分を修正 ▲▲▲ ---
+                        # 元のメッセージにテキスト本文があれば、それも転送メッセージに追加
+                        if original_message.content:
+                            forward_content += f"\n\n{original_message.content}"
+                        
+                        # 新しいチャンネルにメッセージリンクと、取得したcontent/embedsを送信
+                        await new_channel.send(content=forward_content, embeds=original_message.embeds)
+                        logging.info(f"'{new_channel.name}' にメッセージリンクと内容を転送しました。")
+                        # ▲▲▲ 変更箇所 ▲▲▲
 
                     except discord.errors.Forbidden:
                         logging.error(f"エラー: サーバー '{message.guild.name}' でカテゴリーまたはチャンネルの作成、あるいはメッセージの送信に必要な権限がありません。")
@@ -220,7 +225,6 @@ def run_bot():
                     except (ValueError, IndexError):
                         await message.channel.send(f"コマンドの形式が正しくありません: `{command_text}`")
                         return
-                
                 num_match = re.fullmatch(r'num:(\d+)', command_text, re.IGNORECASE)
                 if num_match:
                     try:
@@ -233,7 +237,6 @@ def run_bot():
                         return
                     except (ValueError, IndexError):
                         pass
-
                 if command_text == "":
                     for emoji in REACTION_EMOJIS:
                         await message.add_reaction(emoji)
@@ -246,6 +249,7 @@ def run_bot():
             logging.info("10秒後に再起動します。")
             time.sleep(10)
 
+# --- メインの実行ブロック ---
 if __name__ == '__main__':
     web_thread = Thread(target=run_web_server)
     web_thread.start()
