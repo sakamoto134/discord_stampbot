@@ -10,18 +10,12 @@ from discord.ext import tasks
 from flask import Flask
 
 # --- 定数 ---
-NUMBER_EMOJIS = ["1️⃣","2️⃣","3️⃣","4️⃣","5️⃣","6️⃣","7️⃣","8️⃣","9️⃣","🔟"]
-REACTION_EMOJIS = ["⭕","❌","🔺"]
-WEEKDAYS_JP = ["月","火","水","木","金","土","日"]
 TOKEN = os.getenv("DISCORD_TOKEN")
 PORT = int(os.getenv("PORT", 8080))
 
-# --- baseコマンド設定 ---
 TARGET_BOT_ID_FOR_BASE = 824653933347209227
 TARGET_CHANNEL_NAME_FOR_BASE = "未耐久"
-TARGET_COMMAND_NAME_FOR_BASE = "base"
 
-# --- ロギング設定 ---
 logging.basicConfig(level=logging.INFO, format="%(asctime)s [%(levelname)s] %(message)s")
 
 # --- Webサーバー ---
@@ -48,17 +42,10 @@ def run_bot():
             intents.message_content = True
             intents.guild_messages = True
             intents.guilds = True
+
             client = discord.Client(intents=intents, max_messages=None)
 
             JST = timezone(timedelta(hours=9), "JST")
-            scheduled_time = dtime(hour=20, minute=0, tzinfo=JST)
-
-            @tasks.loop(time=scheduled_time)
-            async def send_weekly_schedule():
-                await client.wait_until_ready()
-                if datetime.now(JST).weekday() != 2:
-                    return
-                logging.info("定期投稿開始")
 
             @client.event
             async def on_ready():
@@ -68,20 +55,18 @@ def run_bot():
             async def on_message(message: discord.Message):
                 if message.author == client.user:
                     return
-
-                # --- 二重実行防止 ---
                 if message.id in processed_messages:
                     return
 
-                # /base コマンド検知
+                # --- /base コマンド検知 ---
                 if (
                     message.channel.name == TARGET_CHANNEL_NAME_FOR_BASE
                     and message.author.id == TARGET_BOT_ID_FOR_BASE
                     and message.interaction_metadata is not None
-                    and message.interaction_metadata.name == TARGET_COMMAND_NAME_FOR_BASE
                 ):
                     processed_messages.add(message.id)
                     logging.info(f"'/base'検知 in {message.channel.name}")
+
                     try:
                         guild = message.guild
                         command_time = message.created_at.astimezone(JST)
@@ -101,13 +86,12 @@ def run_bot():
                                 overwrites[player_role] = discord.PermissionOverwrite(read_messages=True, send_messages=True)
                             if guest_role:
                                 overwrites[guest_role] = discord.PermissionOverwrite(read_messages=True, send_messages=True)
-
                             category = await guild.create_category(category_name, overwrites=overwrites)
                             logging.info(f"プライベートカテゴリ作成: {category_name}")
                         else:
                             logging.info(f"既存カテゴリ使用: {category_name}")
 
-                        # --- 新チャンネル名決定 ---
+                        # --- チャンネル名決定 ---
                         prefix = command_time.strftime("%b").lower()
                         max_num = 0
                         for ch in category.text_channels:
@@ -115,10 +99,9 @@ def run_bot():
                             if m:
                                 num = int(m.group(1))
                                 max_num = max(max_num, num)
-
                         new_name = f"{prefix}{max_num+1}"
 
-                        # --- 同名チャンネル存在チェック ---
+                        # --- 同名チャンネルが既に存在する場合はスキップ ---
                         existing = discord.utils.get(category.text_channels, name=new_name)
                         if existing:
                             logging.warning(f"同名チャンネル {new_name} が既に存在、作成スキップ")
@@ -128,14 +111,12 @@ def run_bot():
                         new_channel = await guild.create_text_channel(new_name, category=category)
                         logging.info(f"チャンネル作成: {new_channel.name}")
 
-                        # --- 元メッセージリンク ---
+                        # --- 元メッセージのリンクを新チャンネルに送信 ---
                         original_link = message.jump_url
-
-                        # --- 新チャンネルにリンク送信 ---
                         sent_msg = await new_channel.send(original_link)
                         logging.info("メッセージリンク送信完了✅")
 
-                        # --- 新チャンネル内メッセージのリンクを取得して未耐久に送信 ---
+                        # --- 新チャンネルのメッセージリンクを未耐久チャンネルへ送信 ---
                         return_link = sent_msg.jump_url
                         origin_channel = discord.utils.get(guild.text_channels, name=TARGET_CHANNEL_NAME_FOR_BASE)
                         if origin_channel:
