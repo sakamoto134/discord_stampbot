@@ -16,11 +16,6 @@ WEEKDAYS_JP = ["月","火","水","木","金","土","日"]
 TOKEN = os.getenv("DISCORD_TOKEN")
 PORT = int(os.getenv("PORT", 8080))
 
-# --- sesh連携設定 ---
-SESH_BOT_ID = 616754792965865495
-TARGET_SESH_CHANNEL_NAME = "sesh⚙️"
-MENTION_ROLES_FOR_SESH = ["sesh"]
-
 # --- baseコマンド設定 ---
 TARGET_BOT_ID_FOR_BASE = 824653933347209227
 TARGET_CHANNEL_NAME_FOR_BASE = "未耐久"
@@ -44,6 +39,8 @@ def run_bot():
     if not TOKEN:
         logging.error("DISCORD_TOKENが設定されていません")
         return
+
+    processed_messages = set()  # 二重実行防止キャッシュ
 
     while True:
         try:
@@ -72,14 +69,18 @@ def run_bot():
                 if message.author == client.user:
                     return
 
+                # --- 二重実行防止 ---
+                if message.id in processed_messages:
+                    return
+
                 # /base コマンド検知
                 if (
                     message.channel.name == TARGET_CHANNEL_NAME_FOR_BASE
                     and message.author.id == TARGET_BOT_ID_FOR_BASE
-                    and message.interaction is not None
-                    and message.interaction.name == TARGET_COMMAND_NAME_FOR_BASE
-                    and not message.interaction.user.bot
+                    and message.interaction_metadata is not None
+                    and message.interaction_metadata.name == TARGET_COMMAND_NAME_FOR_BASE
                 ):
+                    processed_messages.add(message.id)
                     logging.info(f"'/base'検知 in {message.channel.name}")
                     try:
                         guild = message.guild
@@ -114,7 +115,14 @@ def run_bot():
                             if m:
                                 num = int(m.group(1))
                                 max_num = max(max_num, num)
+
                         new_name = f"{prefix}{max_num+1}"
+
+                        # --- 同名チャンネル存在チェック ---
+                        existing = discord.utils.get(category.text_channels, name=new_name)
+                        if existing:
+                            logging.warning(f"同名チャンネル {new_name} が既に存在、作成スキップ")
+                            return
 
                         # --- チャンネル作成 ---
                         new_channel = await guild.create_text_channel(new_name, category=category)
@@ -127,14 +135,14 @@ def run_bot():
                         sent_msg = await new_channel.send(original_link)
                         logging.info("メッセージリンク送信完了✅")
 
-                        # --- 新しく送ったメッセージのリンクを取得して未耐久に送り返す ---
+                        # --- 新チャンネル内メッセージのリンクを取得して未耐久に送信 ---
                         return_link = sent_msg.jump_url
                         origin_channel = discord.utils.get(guild.text_channels, name=TARGET_CHANNEL_NAME_FOR_BASE)
                         if origin_channel:
                             await origin_channel.send(return_link)
                             logging.info("未耐久チャンネルへリンク送信完了✅")
                         else:
-                            logging.warning("未耐久チャンネルが見つかりませんでした")
+                            logging.warning("未耐久チャンネルが見つかりません")
 
                     except Exception as e:
                         logging.error(f"/base処理中エラー: {e}", exc_info=True)
