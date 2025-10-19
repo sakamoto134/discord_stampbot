@@ -18,16 +18,12 @@ PORT = int(os.getenv('PORT', 8080)) # KoyebはPORT環境変数を設定してく
 
 # --- ▼▼▼ 新機能のための定数 ▼▼▼ ---
 # ご利用のseshボットのユーザーID
-# Discordで「開発者モード」を有効にし、seshボットを右クリックして「IDをコピー」で取得
 SESH_BOT_ID = 315577333958443020 # (これは公式seshのIDです。必要に応じて変更してください)
 # seshボットのコマンドを監視するチャンネル名
 TARGET_SESH_CHANNEL_NAME = "sesh⚙️"
 # seshのイベント作成時にメンションするロール名のリスト
-MENTION_ROLES_FOR_SESH = ["test"]
-# 【重要】seshの/listコマンドのIDを設定してください。
-# サーバー設定 > 連携サービス > sesh > /list を右クリックして「IDをコピー」で取得できます。
-SESH_LIST_COMMAND_ID = 950770720303091726 # ★★★★★ ここにあなたの取得したコマンドIDを貼り付けてください ★★★★★
-# --- ▲▲▲ 新機能のための定数 ▲▲▲ ---
+MENTION_ROLES_FOR_SESH = ["seshbot"]
+# --- ▲▲▲ コマンドIDは不要になったため削除しました ▲▲▲ ---
 
 # --- ロギング設定 ---
 logging.basicConfig(level=logging.INFO, format='%(asctime)s:%(levelname)s:%(name)s: %(message)s')
@@ -78,6 +74,7 @@ def run_bot():
 
                     if channel and found_roles:
                         try:
+                            # (略: 既存の定期実行タスク部分は変更なし)
                             logging.info(f"サーバー'{guild.name}'のチャンネル'{channel.name}'にメッセージを送信します。")
                             mentions = " ".join(role.mention for role in found_roles)
                             message_text = (
@@ -96,8 +93,8 @@ def run_bot():
                                     await sent_message.add_reaction(emoji)
                             logging.info(f"サーバー'{guild.name}'への週間予定の投稿が完了しました。")
 
-                        except discord.errors.Forbidden:
-                            logging.error(f"エラー: チャンネル'{channel.name}'への投稿権限がありません。")
+                        except discord.errors.Forbidden as e:
+                            logging.error(f"エラー: チャンネル'{channel.name}'への投稿権限がありません。 {e}")
                         except Exception as e:
                             logging.error(f"定期タスク実行中に予期せぬエラーが発生: {e}", exc_info=True)
                     
@@ -115,18 +112,12 @@ def run_bot():
                 if message.author == client.user:
                     return
 
-                # --- ▼▼▼ 新機能：seshのcreateコマンドに応答するロジック (修正版) ▼▼▼ ---
+                # --- ▼▼▼ 新機能：seshのcreateコマンドに応答するロジック (リプライ版) ▼▼▼ ---
                 if (message.channel.name == TARGET_SESH_CHANNEL_NAME and
                     message.author.id == SESH_BOT_ID and
                     message.interaction is not None and
                     message.interaction.name == 'create' and
                     not message.interaction.user.bot):
-
-                    # SESH_LIST_COMMAND_IDが設定されているかチェック
-                    if SESH_LIST_COMMAND_ID == 0:
-                        logging.error("エラー: SESH_LIST_COMMAND_ID が設定されていません。コードを修正してください。")
-                        await message.channel.send("（ボット管理者向けエラー: `SESH_LIST_COMMAND_ID`が設定されていません）")
-                        return
 
                     logging.info(f"seshのcreateコマンド応答を'{message.channel.name}'チャンネルで検知しました。")
                     try:
@@ -136,18 +127,17 @@ def run_bot():
 
                         if found_roles:
                             mentions = " ".join(role.mention for role in found_roles)
+                            # 予定一覧を確認するよう促すメッセージを作成
+                            response_message = f"{mentions}\n新しいイベントが作成されました。`/list` で予定一覧を確認してください。"
                             
-                            # クリック可能なコマンドを含むメッセージを作成
-                            clickable_command = f"</list:{SESH_LIST_COMMAND_ID}>"
-                            response_message = f"{mentions}\n新しいイベントが作成されました。最新の予定一覧はこちらをクリックして確認できます: {clickable_command}"
-                            
-                            await message.channel.send(response_message)
-                            logging.info(f"メンションとクリック可能なコマンドを送信しました: {response_message}")
+                            # message.channel.send の代わりに message.reply を使用
+                            await message.reply(response_message, mention_author=False)
+                            logging.info(f"リプライでメンションと案内を送信しました。")
                         else:
                             logging.warning(f"サーバー'{guild.name}'で、メンション対象のロール'{', '.join(MENTION_ROLES_FOR_SESH)}'が見つかりませんでした。")
 
-                    except discord.errors.Forbidden:
-                        logging.error(f"エラー: チャンネル'{message.channel.name}'への投稿権限がありません。")
+                    except discord.errors.Forbidden as e:
+                        logging.error(f"エラー: チャンネル'{message.channel.name}'への投稿/リプライ権限がありません。 {e}")
                     except Exception as e:
                         logging.error(f"sesh連携機能の実行中に予期せぬエラーが発生: {e}", exc_info=True)
                     
@@ -163,27 +153,23 @@ def run_bot():
                 if not match:
                     return
 
+                # (略: 既存のメンション応答機能部分は変更なし)
                 command_text = match.group(1).strip()
-
                 date_pattern = r'(\d{1,2})/(\d{1,2})(?:\s+day:(\d+))?'
                 date_match = re.fullmatch(date_pattern, command_text, re.IGNORECASE)
-
                 if date_match:
                     try:
                         month_str, day_str = date_match.group(1), date_match.group(2)
                         date_str = f"{month_str}/{day_str}"
                         days_str = date_match.group(3)
                         days_to_show = int(days_str) if days_str else 7
-
                         if not (1 <= days_to_show <= 10):
                              await message.channel.send("日数は1から10の間で指定してください。")
                              return
-
                         now = datetime.now()
                         start_date = datetime.strptime(date_str, '%m/%d').replace(year=now.year)
                         if start_date.date() < now.date():
                             start_date = start_date.replace(year=now.year + 1)
-
                         for i in range(days_to_show):
                             current_date = start_date + timedelta(days=i)
                             date_text = f"{current_date.month}/{current_date.day}({WEEKDAYS_JP[current_date.weekday()]})"
@@ -194,7 +180,6 @@ def run_bot():
                     except (ValueError, IndexError):
                         await message.channel.send(f"コマンドの形式が正しくありません: `{command_text}`")
                         return
-
                 num_match = re.fullmatch(r'num:(\d+)', command_text, re.IGNORECASE)
                 if num_match:
                     try:
@@ -207,14 +192,11 @@ def run_bot():
                         return
                     except (ValueError, IndexError):
                         pass
-
                 if command_text == "":
                     for emoji in REACTION_EMOJIS:
                         await message.add_reaction(emoji)
                     return
-
             client.run(TOKEN)
-
         except Exception as e:
             logging.error(f"ボットの実行中にエラーが発生: {e}", exc_info=True)
             logging.info("10秒後に再起動します。")
