@@ -144,6 +144,9 @@ def run_bot():
 
                     logging.info(f"seshのcreateコマンド応答を'{message.channel.name}'チャンネルで検知しました。")
                     try:
+                        await message.channel.send("/list")
+                        logging.info("'/list' コマンドを送信しました。")
+                        
                         # ロールオブジェクトを取得
                         guild = message.guild
                         roles_to_mention = [discord.utils.get(guild.roles, name=name) for name in MENTION_ROLES_FOR_SESH]
