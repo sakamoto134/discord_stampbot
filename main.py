@@ -16,6 +16,17 @@ WEEKDAYS_JP = ["月", "火", "水", "木", "金", "土", "日"]
 TOKEN = os.getenv('DISCORD_TOKEN')
 PORT = int(os.getenv('PORT', 8080)) # KoyebはPORT環境変数を設定してくれる
 
+# --- ▼▼▼ 新機能のための定数を追加 ▼▼▼ ---
+# ご利用のseshボットのユーザーIDを設定してください。
+# Discordで「設定」>「詳細設定」から「開発者モード」を有効にし、
+# サーバー内でseshボットのアイコンを右クリックして「IDをコピー」で取得できます。
+SESH_BOT_ID = 616754792965865495 # (これは公式seshのIDです。必要に応じて変更してください)
+# seshボットのコマンドを監視するチャンネル名
+TARGET_SESH_CHANNEL_NAME = "sesh⚙️"
+# seshのイベント作成時にメンションするロール名のリスト
+MENTION_ROLES_FOR_SESH = ["test"]
+# --- ▲▲▲ 新機能のための定数を追加 ▲▲▲ ---
+
 # --- ロギング設定 ---
 logging.basicConfig(level=logging.INFO, format='%(asctime)s:%(levelname)s:%(name)s: %(message)s')
 
@@ -63,30 +74,21 @@ def run_bot():
 
                 # 送信先のチャンネル名とメンションするロール名
                 CHANNEL_NAME = "attendance"
-                # --- ▼▼▼ 変更 ▼▼▼ ---
-                # メンションしたいロール名をリストで指定
                 ROLE_NAMES = ["player", "guest"]
-                # --- ▲▲▲ 変更 ▲▲▲ ---
 
                 # ボットが参加している全てのサーバーをループ
                 for guild in client.guilds:
                     # チャンネルを名前で検索
                     channel = discord.utils.get(guild.text_channels, name=CHANNEL_NAME)
-
-                    # --- ▼▼▼ 変更 ▼▼▼ ---
                     # リストにあるロールをすべて取得し、見つかったものだけをリスト化
                     roles_to_mention = [discord.utils.get(guild.roles, name=name) for name in ROLE_NAMES]
                     found_roles = [role for role in roles_to_mention if role is not None]
-                    # --- ▲▲▲ 変更 ▲▲▲ ---
 
-                    # --- ▼▼▼ 変更 ▼▼▼ ---
                     # チャンネルと、メンション対象のロールが1つ以上見つかった場合のみ処理を実行
                     if channel and found_roles:
-                    # --- ▲▲▲ 変更 ▲▲▲ ---
                         try:
                             logging.info(f"サーバー'{guild.name}'のチャンネル'{channel.name}'にメッセージを送信します。")
 
-                            # --- ▼▼▼ 変更 ▼▼▼ ---
                             # 見つかったすべてのロールに対してメンションを作成
                             mentions = " ".join(role.mention for role in found_roles)
                             message_text = (
@@ -94,7 +96,6 @@ def run_bot():
                                 "21:00~25:00辺りに可能なら投票\n"
                                 "（細かい時間の可否は各自連絡）"
                             )
-                            # --- ▲▲▲ 変更 ▲▲▲ ---
                             await channel.send(message_text)
 
                             # 翌週(月曜日)から1週間分の日付を投稿
@@ -112,11 +113,8 @@ def run_bot():
                         except Exception as e:
                             logging.error(f"定期タスク実行中に予期せぬエラーが発生: {e}", exc_info=True)
                     
-                    # --- ▼▼▼ 変更 ▼▼▼ ---
-                    # デバッグ用のログ（ロールが一つも見つからなかった場合など）
                     elif channel and not found_roles:
                         logging.warning(f"サーバー'{guild.name}'でチャンネル'{CHANNEL_NAME}'は見つかりましたが、ロール'{', '.join(ROLE_NAMES)}'のいずれも見つかりませんでした。")
-                    # --- ▲▲▲ 変更 ▲▲▲ ---
 
             @client.event
             async def on_ready():
@@ -127,7 +125,53 @@ def run_bot():
 
             @client.event
             async def on_message(message):
-                if message.author == client.user or not client.user.mentioned_in(message):
+                # 自分自身のメッセージは無視
+                if message.author == client.user:
+                    return
+
+                # --- ▼▼▼ 新機能：seshのcreateコマンドに応答するロジック ▼▼▼ ---
+                # 以下の条件をすべて満たした場合に実行
+                # 1. チャンネル名が定数で指定した名前と一致する
+                # 2. メッセージの投稿者がseshボットである
+                # 3. メッセージがユーザーのスラッシュコマンド(/create)への応答である
+                # 4. コマンドを実行したのが他のボットではない
+                if (message.channel.name == TARGET_SESH_CHANNEL_NAME and
+                    message.author.id == SESH_BOT_ID and
+                    message.interaction is not None and
+                    message.interaction.name == 'create' and
+                    not message.interaction.user.bot):
+
+                    logging.info(f"seshのcreateコマンド応答を'{message.channel.name}'チャンネルで検知しました。")
+                    try:
+                        # /list コマンドを自動で実行
+                        await message.channel.send("/list")
+                        logging.info("'/list' コマンドを送信しました。")
+
+                        # ロールオブジェクトを取得
+                        guild = message.guild
+                        roles_to_mention = [discord.utils.get(guild.roles, name=name) for name in MENTION_ROLES_FOR_SESH]
+                        found_roles = [role for role in roles_to_mention if role is not None]
+
+                        if found_roles:
+                            # メンション文字列を作成
+                            mentions = " ".join(role.mention for role in found_roles)
+                            # メンションのみのメッセージを送信
+                            await message.channel.send(mentions)
+                            logging.info(f"メンションを送信しました: {mentions}")
+                        else:
+                            logging.warning(f"サーバー'{guild.name}'で、メンション対象のロール'{', '.join(MENTION_ROLES_FOR_SESH)}'が見つかりませんでした。")
+
+                    except discord.errors.Forbidden:
+                        logging.error(f"エラー: チャンネル'{message.channel.name}'への投稿権限がありません。")
+                    except Exception as e:
+                        logging.error(f"sesh連携機能の実行中に予期せぬエラーが発生: {e}", exc_info=True)
+                    
+                    # sesh連携の処理が終わったら、以降の処理は不要なのでここで終了
+                    return
+                # --- ▲▲▲ 新機能：seshのcreateコマンドに応答するロジック ▲▲▲ ---
+
+                # --- 既存の機能：ボットへのメンションに反応するロジック ---
+                if not client.user.mentioned_in(message):
                     return
 
                 pattern = rf'<@!?{client.user.id}>\s*(.*)'
