@@ -120,23 +120,11 @@ def run_bot():
                         new_channel = await guild.create_text_channel(new_name, category=category)
                         logging.info(f"チャンネル作成: {new_channel.name}")
 
-                        # --- メッセージ転送試行 ---
-                        try:
-                            files = []
-                            for attachment in message.attachments:
-                                files.append(await attachment.to_file())
-
-                            content = message.content or "(本文なし)"
-                            await new_channel.send(f"**以下のメッセージを転送しました：**\n{content}", files=files)
-                            logging.info("メッセージ転送完了✅")
-                        except Exception as e:
-                            logging.error(f"メッセージ転送エラー: {e}", exc_info=True)
-
-                        # --- メッセージリンク送信 ---
+                        # --- メッセージリンクのみ送信 ---
                         message_link = message.jump_url
                         try:
-                            await new_channel.send(f"元メッセージはこちら：{message_link}")
-                            logging.info("リンク送信完了✅")
+                            await new_channel.send(message_link)
+                            logging.info("メッセージリンク送信完了✅")
                         except discord.Forbidden:
                             logging.error("リンク送信権限なし ❌")
                         except Exception as e:
