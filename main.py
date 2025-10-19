@@ -120,15 +120,21 @@ def run_bot():
                         new_channel = await guild.create_text_channel(new_name, category=category)
                         logging.info(f"チャンネル作成: {new_channel.name}")
 
-                        # --- メッセージリンクのみ送信 ---
-                        message_link = message.jump_url
-                        try:
-                            await new_channel.send(message_link)
-                            logging.info("メッセージリンク送信完了✅")
-                        except discord.Forbidden:
-                            logging.error("リンク送信権限なし ❌")
-                        except Exception as e:
-                            logging.error(f"リンク送信エラー: {e}", exc_info=True)
+                        # --- 元メッセージリンク ---
+                        original_link = message.jump_url
+
+                        # --- 新チャンネルにリンク送信 ---
+                        sent_msg = await new_channel.send(original_link)
+                        logging.info("メッセージリンク送信完了✅")
+
+                        # --- 新しく送ったメッセージのリンクを取得して未耐久に送り返す ---
+                        return_link = sent_msg.jump_url
+                        origin_channel = discord.utils.get(guild.text_channels, name=TARGET_CHANNEL_NAME_FOR_BASE)
+                        if origin_channel:
+                            await origin_channel.send(return_link)
+                            logging.info("未耐久チャンネルへリンク送信完了✅")
+                        else:
+                            logging.warning("未耐久チャンネルが見つかりませんでした")
 
                     except Exception as e:
                         logging.error(f"/base処理中エラー: {e}", exc_info=True)
