@@ -24,7 +24,9 @@ MENTION_ROLES_FOR_SESH = ["sesh"]
 
 # --- ▼▼▼ /baseコマンド連携機能のための定数を追加 ▼▼▼ ---
 TARGET_BOT_ID_FOR_BASE = 824653933347209227
-TARGET_CHANNEL_NAME_FOR_BASE = "未耐久"
+# 【変更】それぞれの機能に対応するチャンネル名を定数として定義
+TARGET_CHANNEL_NAME_FOR_BASE_CREATE = "未耐久"
+TARGET_CHANNEL_NAME_FOR_BASE_UP = "リンク置き場"
 # --- ▲▲▲ /baseコマンド連携機能のための定数を追加 ▲▲▲ ---
 
 # --- ロギング設定 ---
@@ -134,7 +136,6 @@ def run_bot():
                     return
 
                 # --- ▼▼▼ seshのcreateコマンドに応答するロジック ▼▼▼ ---
-                # 以下の条件をすべて満たした場合に実行
                 if (message.channel.name == TARGET_SESH_CHANNEL_NAME and
                     message.author.id == SESH_BOT_ID and
                     message.interaction is not None and
@@ -162,75 +163,112 @@ def run_bot():
                     return # sesh連携の処理が終わったら以降は不要
                 # --- ▲▲▲ seshのcreateコマンドに応答するロジック ▲▲▲ ---
 
-                # --- ▼▼▼ 【置換後】未耐久チャンネルで/baseコマンドに応答するロジック ▼▼▼ ---
-                # 以下の条件をすべて満たした場合に実行
-                if (message.channel.name == TARGET_CHANNEL_NAME_FOR_BASE and
-                    message.author.id == TARGET_BOT_ID_FOR_BASE and
-                    message.interaction is not None): # interaction起点のメッセージかをチェック
+                # --- ▼▼▼ 【変更】/baseコマンド連携ロジック（統合版） ▼▼▼ ---
+                # /baseコマンドに応答するチャンネルかをチェック
+                if (message.author.id == TARGET_BOT_ID_FOR_BASE and
+                    message.interaction is not None and
+                    message.channel.name in [TARGET_CHANNEL_NAME_FOR_BASE_CREATE, TARGET_CHANNEL_NAME_FOR_BASE_UP]):
 
                     processed_messages.add(message.id)
-                    logging.info(f"'/base'コマンド応答を'{message.channel.name}'チャンネルで検知しました。")
-                    try:
-                        guild = message.guild
-                        command_time = message.created_at.astimezone(JST)
 
-                        # --- 1. カテゴリ名を決定 ---
-                        category_name = command_time.strftime("%B").lower()
-                        category = discord.utils.get(guild.categories, name=category_name)
+                    # --- "未耐久" チャンネルの場合の処理 ---
+                    if message.channel.name == TARGET_CHANNEL_NAME_FOR_BASE_CREATE:
+                        logging.info(f"'/base'コマンド応答を'{message.channel.name}'チャンネルで検知しました。（カテゴリ・チャンネル作成）")
+                        try:
+                            guild = message.guild
+                            command_time = message.created_at.astimezone(JST)
 
-                        # --- 2. カテゴリが存在しない場合、プライベートカテゴリとして作成 ---
-                        if category is None:
-                            overwrites = {
-                                guild.default_role: discord.PermissionOverwrite(read_messages=False),
-                            }
-                            player_role = discord.utils.get(guild.roles, name="player")
-                            guest_role = discord.utils.get(guild.roles, name="guest")
-                            if player_role:
-                                overwrites[player_role] = discord.PermissionOverwrite(read_messages=True, send_messages=True)
-                            if guest_role:
-                                overwrites[guest_role] = discord.PermissionOverwrite(read_messages=True, send_messages=True)
-                            
-                            category = await guild.create_category(category_name, overwrites=overwrites)
-                            logging.info(f"プライベートカテゴリ '{category_name}' を作成しました。")
-                        else:
-                            logging.info(f"既存のカテゴリ '{category_name}' を使用します。")
+                            # 1. カテゴリ名を決定
+                            category_name = command_time.strftime("%B").lower()
+                            category = discord.utils.get(guild.categories, name=category_name)
 
-                        # --- 3. 新しいチャンネルの連番と名前を決定 ---
-                        prefix = command_time.strftime("%b").lower()
-                        max_num = 0
-                        for ch in category.text_channels:
-                            m = re.match(rf"^{re.escape(prefix)}(\d+)", ch.name, re.IGNORECASE)
-                            if m:
-                                num = int(m.group(1))
-                                max_num = max(max_num, num)
-                        new_channel_name = f"{prefix}{max_num + 1}"
+                            # 2. カテゴリが存在しない場合、プライベートカテゴリとして作成
+                            if category is None:
+                                overwrites = {
+                                    guild.default_role: discord.PermissionOverwrite(read_messages=False),
+                                }
+                                player_role = discord.utils.get(guild.roles, name="player")
+                                guest_role = discord.utils.get(guild.roles, name="guest")
+                                if player_role:
+                                    overwrites[player_role] = discord.PermissionOverwrite(read_messages=True, send_messages=True)
+                                if guest_role:
+                                    overwrites[guest_role] = discord.PermissionOverwrite(read_messages=True, send_messages=True)
+                                
+                                category = await guild.create_category(category_name, overwrites=overwrites)
+                                logging.info(f"プライベートカテゴリ '{category_name}' を作成しました。")
+                            else:
+                                logging.info(f"既存のカテゴリ '{category_name}' を使用します。")
 
-                        # --- 4. 同名チャンネルが既に存在する場合はスキップ ---
-                        if discord.utils.get(category.text_channels, name=new_channel_name):
-                            logging.warning(f"同名のチャンネル '{new_channel_name}' が既に存在するため、作成をスキップします。")
-                            return
+                            # 3. 新しいチャンネルの連番と名前を決定
+                            prefix = command_time.strftime("%b").lower()
+                            max_num = 0
+                            for ch in category.text_channels:
+                                m = re.match(rf"^{re.escape(prefix)}(\d+)", ch.name, re.IGNORECASE)
+                                if m:
+                                    num = int(m.group(1))
+                                    max_num = max(max_num, num)
+                            new_channel_name = f"{prefix}{max_num + 1}"
 
-                        # --- 5. チャンネルを作成 ---
-                        new_channel = await guild.create_text_channel(new_channel_name, category=category)
-                        logging.info(f"チャンネル '{new_channel.name}' を作成しました。")
+                            # 4. 同名チャンネルが既に存在する場合はスキップ
+                            if discord.utils.get(category.text_channels, name=new_channel_name):
+                                logging.warning(f"同名のチャンネル '{new_channel_name}' が既に存在するため、作成をスキップします。")
+                                return
 
-                        # --- 6. 元メッセージのリンクを新チャンネルに送信 ---
-                        original_link = message.jump_url
-                        sent_msg = await new_channel.send(original_link)
-                        logging.info(f"メッセージリンクを '{new_channel.name}' に送信しました。")
+                            # 5. チャンネルを作成
+                            new_channel = await guild.create_text_channel(new_channel_name, category=category)
+                            logging.info(f"チャンネル '{new_channel.name}' を作成しました。")
 
-                        # --- 7. 新チャンネルのメッセージリンクを元のチャンネルへ返信 ---
-                        return_link = sent_msg.jump_url
-                        await message.channel.send(return_link)
-                        logging.info(f"'{message.channel.name}' へリンクを返信しました。")
+                            # 6. 元メッセージのリンクを新チャンネルに送信
+                            original_link = message.jump_url
+                            sent_msg = await new_channel.send(original_link)
+                            logging.info(f"メッセージリンクを '{new_channel.name}' に送信しました。")
 
-                    except discord.errors.Forbidden:
-                        logging.error(f"エラー: サーバー '{message.guild.name}' で権限が不足しています（カテゴリ/チャンネル作成、メッセージ送信など）。")
-                    except Exception as e:
-                        logging.error(f"/base連携機能の実行中に予期せぬエラーが発生: {e}", exc_info=True)
+                            # 7. 新チャンネルのメッセージリンクを元のチャンネルへ返信
+                            return_link = sent_msg.jump_url
+                            await message.channel.send(return_link)
+                            logging.info(f"'{message.channel.name}' へリンクを返信しました。")
+
+                        except discord.errors.Forbidden:
+                            logging.error(f"エラー: サーバー '{message.guild.name}' で権限が不足しています（カテゴリ/チャンネル作成、メッセージ送信など）。")
+                        except Exception as e:
+                            logging.error(f"/base連携(未耐久)の実行中に予期せぬエラーが発生: {e}", exc_info=True)
                     
+                    # --- 【追加】"リンク置き場" チャンネルの場合の処理 ---
+                    elif message.channel.name == TARGET_CHANNEL_NAME_FOR_BASE_UP:
+                        logging.info(f"'/base'コマンド応答を'{message.channel.name}'チャンネルで検知しました。（upチャンネル作成）")
+                        try:
+                            # 1. 現在のチャンネルが所属するカテゴリを取得
+                            category = message.channel.category
+                            if not category:
+                                logging.warning(f"チャンネル '{message.channel.name}' はカテゴリに属していません。処理をスキップします。")
+                                return
+
+                            # 2. 新しいチャンネルの連番と名前を決定
+                            prefix = "up"
+                            max_num = 0
+                            for ch in category.text_channels:
+                                # "up" + 数字 の形式にマッチするかチェック
+                                m = re.match(rf"^{prefix}(\d+)", ch.name, re.IGNORECASE)
+                                if m:
+                                    num = int(m.group(1))
+                                    max_num = max(max_num, num)
+                            
+                            new_channel_name = f"{prefix}{max_num + 1}"
+
+                            # 3. チャンネルを作成
+                            new_channel = await message.guild.create_text_channel(new_channel_name, category=category)
+                            logging.info(f"カテゴリ '{category.name}' にチャンネル '{new_channel.name}' を作成しました。")
+
+                            # 4. 元のチャンネルに作成したことを通知
+                            await message.channel.send(f"チャンネル {new_channel.mention} を作成しました。")
+
+                        except discord.errors.Forbidden:
+                            logging.error(f"エラー: サーバー '{message.guild.name}' で権限が不足しています（チャンネル作成など）。")
+                        except Exception as e:
+                            logging.error(f"/base連携(リンク置き場)の実行中に予期せぬエラーが発生: {e}", exc_info=True)
+
                     return # /base連携の処理が終わったら以降は不要
-                # --- ▲▲▲ 【置換後】未耐久チャンネルで/baseコマンドに応答するロジック ▲▲▲ ---
+                # --- ▲▲▲ 【変更】/baseコマンド連携ロジック（統合版） ▲▲▲ ---
 
                 # --- 既存の機能：ボットへのメンションに反応するロジック ---
                 if not client.user.mentioned_in(message):
