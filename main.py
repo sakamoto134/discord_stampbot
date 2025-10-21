@@ -25,7 +25,6 @@ MENTION_ROLES_FOR_SESH = ["sesh"]
 # --- ▼▼▼ /baseコマンド連携機能のための定数を追加 ▼▼▼ ---
 TARGET_BOT_ID_FOR_BASE = 824653933347209227
 TARGET_CHANNEL_NAME_FOR_BASE = "未耐久"
-TARGET_CHANNEL_NAME_FOR_LINK_BASE = "リンク置き場" # ★ 新規追加
 # --- ▲▲▲ /baseコマンド連携機能のための定数を追加 ▲▲▲ ---
 
 # --- ロギング設定 ---
@@ -163,7 +162,7 @@ def run_bot():
                     return # sesh連携の処理が終わったら以降は不要
                 # --- ▲▲▲ seshのcreateコマンドに応答するロジック ▲▲▲ ---
 
-                # --- ▼▼▼ 未耐久チャンネルで/baseコマンドに応答するロジック ▼▼▼ ---
+                # --- ▼▼▼ 【置換後】未耐久チャンネルで/baseコマンドに応答するロジック ▼▼▼ ---
                 # 以下の条件をすべて満たした場合に実行
                 if (message.channel.name == TARGET_CHANNEL_NAME_FOR_BASE and
                     message.author.id == TARGET_BOT_ID_FOR_BASE and
@@ -231,65 +230,52 @@ def run_bot():
                         logging.error(f"/base連携機能の実行中に予期せぬエラーが発生: {e}", exc_info=True)
                     
                     return # /base連携の処理が終わったら以降は不要
-                # --- ▲▲▲ 未耐久チャンネルで/baseコマンドに応答するロジック ▲▲▲ ---
+                # --- ▲▲▲ 【置換後】未耐久チャンネルで/baseコマンドに応答するロジック ▲▲▲ ---
 
-                # --- ▼▼▼ 【★ 新規追加】リンク置き場チャンネルで/baseコマンドに応答するロジック ▼▼▼ ---
-                if (message.channel.name == TARGET_CHANNEL_NAME_FOR_LINK_BASE and
+                # --- ▼▼▼ 【追加】リンク置き場チャンネルで/baseコマンドに応答するロジック ▼▼▼ ---
+                if (message.channel.name == "リンク置き場" and
                     message.author.id == TARGET_BOT_ID_FOR_BASE and
                     message.interaction is not None):
 
                     processed_messages.add(message.id)
-                    logging.info(f"'/base'コマンド応答を'{message.channel.name}'チャンネルで検知しました。")
+                    logging.info(f"'/base'コマンド応答を'{message.channel.name}'チャンネル（リンク置き場）で検知しました。")
                     try:
                         guild = message.guild
+                        command_time = message.created_at.astimezone(JST)
+
+                        # --- 1. 現在のカテゴリーを取得 ---
                         category = message.channel.category
-
-                        # チャンネルがカテゴリに属しているか確認
-                        if not category:
-                            logging.warning(f"チャンネル '{message.channel.name}' がどのカテゴリにも属していないため、処理を中断します。")
+                        if category is None:
+                            logging.warning("リンク置き場チャンネルがカテゴリに属していません。")
                             return
 
-                        # --- 1. カテゴリ内の 'upX' チャンネルから最大の番号を取得 ---
-                        max_num = 0
-                        for ch in category.text_channels:
-                            m = re.match(r"^up(\d+)$", ch.name, re.IGNORECASE)
-                            if m:
-                                num = int(m.group(1))
-                                max_num = max(max_num, num)
-                        
-                        # --- 2. 新しいチャンネルを2つ作成 ---
-                        new_channel1_name = f"up{max_num + 1}"
-                        new_channel2_name = f"up{max_num + 2}"
+                        # --- 2. up1, up2 チャンネルを作成（存在しない場合） ---
+                        up_channels = []
+                        for name in ["up1", "up2"]:
+                            ch = discord.utils.get(category.text_channels, name=name)
+                            if ch is None:
+                                ch = await guild.create_text_channel(name, category=category)
+                                logging.info(f"チャンネル '{name}' をカテゴリ '{category.name}' に作成しました。")
+                            else:
+                                logging.info(f"既存のチャンネル '{name}' を使用します。")
+                            up_channels.append(ch)
 
-                        # 連番ロジックのため基本的には存在しないはずだが、念のため同名チャンネルの存在をチェック
-                        if discord.utils.get(category.text_channels, name=new_channel1_name) or \
-                           discord.utils.get(category.text_channels, name=new_channel2_name):
-                            logging.warning(f"作成予定のチャンネル '{new_channel1_name}' または '{new_channel2_name}' が既に存在するため、処理を中断します。")
-                            return
-
-                        new_channel1 = await category.create_text_channel(new_channel1_name)
-                        logging.info(f"チャンネル '{new_channel1.name}' を作成しました。")
-                        new_channel2 = await category.create_text_channel(new_channel2_name)
-                        logging.info(f"チャンネル '{new_channel2.name}' を作成しました。")
-
-                        # --- 3. メッセージリンクを「リンク置き場」と「up1」の両方に投稿 ---
+                        # --- 3. 元メッセージのリンクを生成 ---
                         original_link = message.jump_url
 
-                        # 元の「リンク置き場」チャンネルに投稿
+                        # --- 4. メッセージリンクをリンク置き場と up1 に貼り付け ---
                         await message.channel.send(original_link)
-                        logging.info(f"メッセージリンクを '{message.channel.name}' に送信しました。")
-
-                        # 新しく作成した1つ目のチャンネル (upX) に投稿
-                        await new_channel1.send(original_link)
-                        logging.info(f"メッセージリンクを '{new_channel1.name}' に送信しました。")
+                        await up_channels[0].send(original_link)
+                        logging.info("リンクをリンク置き場と up1 に送信しました。")
 
                     except discord.errors.Forbidden:
-                        logging.error(f"エラー: サーバー '{guild.name}' で権限が不足しています（チャンネル作成、メッセージ送信など）。")
+                        logging.error(f"エラー: サーバー '{message.guild.name}' で権限が不足しています（カテゴリ/チャンネル作成、メッセージ送信など）。")
                     except Exception as e:
-                        logging.error(f"'/base'連携(リンク置き場)の実行中に予期せぬエラーが発生: {e}", exc_info=True)
-                    
-                    return # 処理が終わったら以降は不要
-                # --- ▲▲▲ 【★ 新規追加】リンク置き場チャンネルで/baseコマンドに応答するロジック ▲▲▲ ---
+                        logging.error(f"リンク置き場処理中に予期せぬエラーが発生: {e}", exc_info=True)
+
+                    return
+                # --- ▲▲▲ 【追加】リンク置き場チャンネルで/baseコマンドに応答するロジック ▲▲▲ ---
+
 
                 # --- 既存の機能：ボットへのメンションに反応するロジック ---
                 if not client.user.mentioned_in(message):
