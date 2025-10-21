@@ -272,8 +272,9 @@ def run_bot():
                         logging.info(f"メッセージリンクを '{new_channel.name}' に送信しました。")
 
                         # --- 5. 同じリンクをリンク置き場にも送信 ---
-                        await message.channel.send(original_link)
-                        logging.info(f"メッセージリンクを '{message.channel.name}' にも送信しました。")
+                        return_link = sent_msg.jump_url
+                        await message.channel.send(return_link)
+                        logging.info(f"'{message.channel.name}' へリンクを返信しました。")
 
                     except discord.errors.Forbidden:
                         logging.error("エラー: 権限不足（カテゴリ/チャンネル作成、メッセージ送信など）。")
