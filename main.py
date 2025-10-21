@@ -25,6 +25,7 @@ MENTION_ROLES_FOR_SESH = ["sesh"]
 # --- ▼▼▼ /baseコマンド連携機能のための定数を追加 ▼▼▼ ---
 TARGET_BOT_ID_FOR_BASE = 824653933347209227
 TARGET_CHANNEL_NAME_FOR_BASE = "未耐久"
+TARGET_CHANNEL_NAME_FOR_LINKS = "リンク置き場"
 # --- ▲▲▲ /baseコマンド連携機能のための定数を追加 ▲▲▲ ---
 
 # --- ロギング設定 ---
@@ -233,45 +234,51 @@ def run_bot():
                 # --- ▲▲▲ 【置換後】未耐久チャンネルで/baseコマンドに応答するロジック ▲▲▲ ---
 
                 # --- ▼▼▼ 【追加】リンク置き場チャンネルで/baseコマンドに応答するロジック ▼▼▼ ---
-                if (message.channel.name == "リンク置き場" and
+                if (message.channel.name == TARGET_CHANNEL_NAME_FOR_LINKS and
                     message.author.id == TARGET_BOT_ID_FOR_BASE and
                     message.interaction is not None):
 
                     processed_messages.add(message.id)
-                    logging.info(f"'/base'コマンド応答を'{message.channel.name}'チャンネル（リンク置き場）で検知しました。")
+                    logging.info(f"'/base'コマンド応答を'{TARGET_CHANNEL_NAME_FOR_LINKS}'チャンネルで検知しました。")
+
                     try:
                         guild = message.guild
-                        command_time = message.created_at.astimezone(JST)
-
-                        # --- 1. 現在のカテゴリーを取得 ---
-                        category = message.channel.category
-                        if category is None:
-                            logging.warning("リンク置き場チャンネルがカテゴリに属していません。")
+                        current_category = message.channel.category
+                        if not current_category:
+                            logging.warning("リンク置き場がカテゴリに属していません。")
                             return
 
-                        # --- 2. up1, up2 チャンネルを作成（存在しない場合） ---
-                        up_channels = []
-                        for name in ["up1", "up2"]:
-                            ch = discord.utils.get(category.text_channels, name=name)
-                            if ch is None:
-                                ch = await guild.create_text_channel(name, category=category)
-                                logging.info(f"チャンネル '{name}' をカテゴリ '{category.name}' に作成しました。")
-                            else:
-                                logging.info(f"既存のチャンネル '{name}' を使用します。")
-                            up_channels.append(ch)
+                        # --- 1. upチャンネルの連番を探す ---
+                        max_num = 0
+                        for ch in current_category.text_channels:
+                            m = re.match(r"^up(\d+)$", ch.name, re.IGNORECASE)
+                            if m:
+                                num = int(m.group(1))
+                                max_num = max(max_num, num)
+                        new_channel_name = f"up{max_num + 1}"
 
-                        # --- 3. 元メッセージのリンクを生成 ---
+                        # --- 2. 同名チャンネル存在チェック ---
+                        if discord.utils.get(current_category.text_channels, name=new_channel_name):
+                            logging.warning(f"同名のチャンネル '{new_channel_name}' が既に存在します。")
+                            return
+
+                        # --- 3. upチャンネル作成 ---
+                        new_channel = await guild.create_text_channel(new_channel_name, category=current_category)
+                        logging.info(f"チャンネル '{new_channel.name}' を作成しました。")
+
+                        # --- 4. 元メッセージのリンクをupチャンネルに送信 ---
                         original_link = message.jump_url
+                        sent_msg = await new_channel.send(original_link)
+                        logging.info(f"メッセージリンクを '{new_channel.name}' に送信しました。")
 
-                        # --- 4. メッセージリンクをリンク置き場と up1 に貼り付け ---
+                        # --- 5. 同じリンクをリンク置き場にも送信 ---
                         await message.channel.send(original_link)
-                        await up_channels[0].send(original_link)
-                        logging.info("リンクをリンク置き場と up1 に送信しました。")
+                        logging.info(f"メッセージリンクを '{message.channel.name}' にも送信しました。")
 
                     except discord.errors.Forbidden:
-                        logging.error(f"エラー: サーバー '{message.guild.name}' で権限が不足しています（カテゴリ/チャンネル作成、メッセージ送信など）。")
+                        logging.error("エラー: 権限不足（カテゴリ/チャンネル作成、メッセージ送信など）。")
                     except Exception as e:
-                        logging.error(f"リンク置き場処理中に予期せぬエラーが発生: {e}", exc_info=True)
+                        logging.error(f"リンク置き場連携機能で予期せぬエラー: {e}", exc_info=True)
 
                     return
                 # --- ▲▲▲ 【追加】リンク置き場チャンネルで/baseコマンドに応答するロジック ▲▲▲ ---
