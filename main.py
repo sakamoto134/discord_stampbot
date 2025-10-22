@@ -25,7 +25,7 @@ MENTION_ROLES_FOR_SESH = ["sesh"]
 # --- ▼▼▼ /baseコマンド連携機能のための定数を追加 ▼▼▼ ---
 TARGET_BOT_ID_FOR_BASE = 824653933347209227
 TARGET_CHANNEL_NAME_FOR_BASE = "未耐久"
-TARGET_CHANNEL_NAME_FOR_LINKS = "リンク置き場"
+TARGET_CHANNEL_NAME_FOR_LINKS = "base-link"
 # --- ▲▲▲ /baseコマンド連携機能のための定数を追加 ▲▲▲ ---
 
 # --- ロギング設定 ---
