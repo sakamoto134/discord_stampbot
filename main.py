@@ -18,7 +18,7 @@ PORT = int(os.getenv('PORT', 8080)) # KoyebはPORT環境変数を設定してく
 
 # --- ▼▼▼ sesh連携機能のための定数を追加 ▼▼▼ ---
 SESH_BOT_ID = 616754792965865495 # (これは公式seshのIDです。必要に応じて変更してください)
-TARGET_SESH_CHANNEL_NAME = "sesh⚙️"
+TARGET_SESH_CHANNEL_NAME = "calender🗓️"
 MENTION_ROLES_FOR_SESH = ["sesh"]
 # --- ▲▲▲ sesh連携機能のための定数を追加 ▲▲▲ ---
 
