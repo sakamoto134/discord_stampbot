@@ -163,14 +163,14 @@ def run_bot():
                     return # sesh連携の処理が終わったら以降は不要
                 # --- ▲▲▲ seshのcreateコマンドに応答するロジック ▲▲▲ ---
 
-                # --- ▼▼▼ 【置換後】未耐久チャンネルで/baseコマンドに応答するロジック ▼▼▼ ---
+                # --- ▼▼▼ 【置換後】未耐久チャンネルでTARGET_BOTが発言したら応答するロジック ▼▼▼ ---
                 # 以下の条件をすべて満たした場合に実行
                 if (message.channel.name == TARGET_CHANNEL_NAME_FOR_BASE and
-                    message.author.id == TARGET_BOT_ID_FOR_BASE and
-                    message.interaction is not None): # interaction起点のメッセージかをチェック
+                    message.author.id == TARGET_BOT_ID_FOR_BASE):
+                    # インタラクションチェック(message.interaction is not None)を削除しました
 
                     processed_messages.add(message.id)
-                    logging.info(f"'/base'コマンド応答を'{message.channel.name}'チャンネルで検知しました。")
+                    logging.info(f"Bot(ID:{TARGET_BOT_ID_FOR_BASE})の発言を'{message.channel.name}'チャンネルで検知しました。")
                     try:
                         guild = message.guild
                         command_time = message.created_at.astimezone(JST)
@@ -228,18 +228,18 @@ def run_bot():
                     except discord.errors.Forbidden:
                         logging.error(f"エラー: サーバー '{message.guild.name}' で権限が不足しています（カテゴリ/チャンネル作成、メッセージ送信など）。")
                     except Exception as e:
-                        logging.error(f"/base連携機能の実行中に予期せぬエラーが発生: {e}", exc_info=True)
+                        logging.error(f"連携機能の実行中に予期せぬエラーが発生: {e}", exc_info=True)
                     
-                    return # /base連携の処理が終わったら以降は不要
-                # --- ▲▲▲ 【置換後】未耐久チャンネルで/baseコマンドに応答するロジック ▲▲▲ ---
+                    return # 連携処理が終わったら以降は不要
+                # --- ▲▲▲ 【置換後】未耐久チャンネルでTARGET_BOTが発言したら応答するロジック ▲▲▲ ---
 
-                # --- ▼▼▼ 【追加】リンク置き場チャンネルで/baseコマンドに応答するロジック ▼▼▼ ---
+                # --- ▼▼▼ 【追加】リンク置き場チャンネルでTARGET_BOTが発言したら応答するロジック ▼▼▼ ---
                 if (message.channel.name == TARGET_CHANNEL_NAME_FOR_LINKS and
-                    message.author.id == TARGET_BOT_ID_FOR_BASE and
-                    message.interaction is not None):
+                    message.author.id == TARGET_BOT_ID_FOR_BASE):
+                    # インタラクションチェック(message.interaction is not None)を削除しました
 
                     processed_messages.add(message.id)
-                    logging.info(f"'/base'コマンド応答を'{TARGET_CHANNEL_NAME_FOR_LINKS}'チャンネルで検知しました。")
+                    logging.info(f"Bot(ID:{TARGET_BOT_ID_FOR_BASE})の発言を'{TARGET_CHANNEL_NAME_FOR_LINKS}'チャンネルで検知しました。")
 
                     try:
                         guild = message.guild
@@ -282,7 +282,7 @@ def run_bot():
                         logging.error(f"リンク置き場連携機能で予期せぬエラー: {e}", exc_info=True)
 
                     return
-                # --- ▲▲▲ 【追加】リンク置き場チャンネルで/baseコマンドに応答するロジック ▲▲▲ ---
+                # --- ▲▲▲ 【追加】リンク置き場チャンネルでTARGET_BOTが発言したら応答するロジック ▲▲▲ ---
 
 
                 # --- 既存の機能：ボットへのメンションに反応するロジック ---
