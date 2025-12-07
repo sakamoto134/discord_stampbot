@@ -185,11 +185,11 @@ def run_bot():
                                 guild.default_role: discord.PermissionOverwrite(read_messages=False),
                             }
                             player_role = discord.utils.get(guild.roles, name="player")
-                            guest_role = discord.utils.get(guild.roles, name="guest")
+                            # guest_role = discord.utils.get(guild.roles, name="guest")
                             if player_role:
                                 overwrites[player_role] = discord.PermissionOverwrite(read_messages=True, send_messages=True)
-                            if guest_role:
-                                overwrites[guest_role] = discord.PermissionOverwrite(read_messages=True, send_messages=True)
+                            # if guest_role:
+                                # overwrites[guest_role] = discord.PermissionOverwrite(read_messages=True, send_messages=True)
                             
                             category = await guild.create_category(category_name, overwrites=overwrites)
                             logging.info(f"プライベートカテゴリ '{category_name}' を作成しました。")
