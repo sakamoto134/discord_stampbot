@@ -135,7 +135,6 @@ def run_bot():
                     return
 
                 # --- ▼▼▼ seshのcreateコマンドに応答するロジック ▼▼▼ ---
-                # 以下の条件をすべて満たした場合に実行
                 if (message.channel.name == TARGET_SESH_CHANNEL_NAME and
                     message.author.id == SESH_BOT_ID and
                     message.interaction is not None and
@@ -151,23 +150,20 @@ def run_bot():
                         if found_roles:
                             mentions = " ".join(role.mention for role in found_roles)
                             await message.channel.send(mentions)
-                            logging.info(f"メンションを送信しました: {mentions}")
                         else:
-                            logging.warning(f"サーバー'{guild.name}'で、メンション対象のロール'{', '.join(MENTION_ROLES_FOR_SESH)}'が見つかりませんでした。")
+                            logging.warning(f"サーバー'{guild.name}'で、メンション対象のロールが見つかりませんでした。")
 
                     except discord.errors.Forbidden:
                         logging.error(f"エラー: チャンネル'{message.channel.name}'への投稿権限がありません。")
                     except Exception as e:
                         logging.error(f"sesh連携機能の実行中に予期せぬエラーが発生: {e}", exc_info=True)
                     
-                    return # sesh連携の処理が終わったら以降は不要
+                    return
                 # --- ▲▲▲ seshのcreateコマンドに応答するロジック ▲▲▲ ---
 
-                # --- ▼▼▼ 【置換後】未耐久チャンネルでTARGET_BOTが発言したら応答するロジック ▼▼▼ ---
-                # 以下の条件をすべて満たした場合に実行
+                # --- ▼▼▼ 未耐久チャンネルでTARGET_BOTが発言したら応答するロジック ▼▼▼ ---
                 if (message.channel.name == TARGET_CHANNEL_NAME_FOR_BASE and
                     message.author.id == TARGET_BOT_ID_FOR_BASE):
-                    # インタラクションチェック(message.interaction is not None)を削除しました
 
                     processed_messages.add(message.id)
                     logging.info(f"Bot(ID:{TARGET_BOT_ID_FOR_BASE})の発言を'{message.channel.name}'チャンネルで検知しました。")
@@ -175,28 +171,20 @@ def run_bot():
                         guild = message.guild
                         command_time = message.created_at.astimezone(JST)
 
-                        # --- 1. カテゴリ名を決定 ---
                         category_name = command_time.strftime("%B").lower()
                         category = discord.utils.get(guild.categories, name=category_name)
 
-                        # --- 2. カテゴリが存在しない場合、プライベートカテゴリとして作成 ---
                         if category is None:
                             overwrites = {
                                 guild.default_role: discord.PermissionOverwrite(read_messages=False),
                             }
                             player_role = discord.utils.get(guild.roles, name="player")
-                            # guest_role = discord.utils.get(guild.roles, name="guest")
                             if player_role:
                                 overwrites[player_role] = discord.PermissionOverwrite(read_messages=True, send_messages=True)
-                            # if guest_role:
-                                # overwrites[guest_role] = discord.PermissionOverwrite(read_messages=True, send_messages=True)
                             
                             category = await guild.create_category(category_name, overwrites=overwrites)
                             logging.info(f"プライベートカテゴリ '{category_name}' を作成しました。")
-                        else:
-                            logging.info(f"既存のカテゴリ '{category_name}' を使用します。")
 
-                        # --- 3. 新しいチャンネルの連番と名前を決定 ---
                         prefix = command_time.strftime("%b").lower()
                         max_num = 0
                         for ch in category.text_channels:
@@ -206,83 +194,69 @@ def run_bot():
                                 max_num = max(max_num, num)
                         new_channel_name = f"{prefix}{max_num + 1}"
 
-                        # --- 4. 同名チャンネルが既に存在する場合はスキップ ---
                         if discord.utils.get(category.text_channels, name=new_channel_name):
-                            logging.warning(f"同名のチャンネル '{new_channel_name}' が既に存在するため、作成をスキップします。")
                             return
 
-                        # --- 5. チャンネルを作成 ---
                         new_channel = await guild.create_text_channel(new_channel_name, category=category)
-                        logging.info(f"チャンネル '{new_channel.name}' を作成しました。")
-
-                        # --- 6. 元メッセージのリンクを新チャンネルに送信 ---
                         original_link = message.jump_url
                         sent_msg = await new_channel.send(original_link)
-                        logging.info(f"メッセージリンクを '{new_channel.name}' に送信しました。")
-
-                        # --- 7. 新チャンネルのメッセージリンクを元のチャンネルへ返信 ---
                         return_link = sent_msg.jump_url
                         await message.channel.send(return_link)
-                        logging.info(f"'{message.channel.name}' へリンクを返信しました。")
 
-                    except discord.errors.Forbidden:
-                        logging.error(f"エラー: サーバー '{message.guild.name}' で権限が不足しています（カテゴリ/チャンネル作成、メッセージ送信など）。")
                     except Exception as e:
-                        logging.error(f"連携機能の実行中に予期せぬエラーが発生: {e}", exc_info=True)
+                        logging.error(f"連携機能(未耐久)でエラー: {e}", exc_info=True)
                     
-                    return # 連携処理が終わったら以降は不要
-                # --- ▲▲▲ 【置換後】未耐久チャンネルでTARGET_BOTが発言したら応答するロジック ▲▲▲ ---
+                    return
+                # --- ▲▲▲ 未耐久チャンネルでTARGET_BOTが発言したら応答するロジック ▲▲▲ ---
 
-                # --- ▼▼▼ 【追加】リンク置き場チャンネルでTARGET_BOTが発言したら応答するロジック ▼▼▼ ---
+                # --- ▼▼▼ 【修正】リンク置き場(base-link)チャンネルの応答ロジック ▼▼▼ ---
                 if (message.channel.name == TARGET_CHANNEL_NAME_FOR_LINKS and
                     message.author.id == TARGET_BOT_ID_FOR_BASE):
-                    # インタラクションチェック(message.interaction is not None)を削除しました
 
                     processed_messages.add(message.id)
-                    logging.info(f"Bot(ID:{TARGET_BOT_ID_FOR_BASE})の発言を'{TARGET_CHANNEL_NAME_FOR_LINKS}'チャンネルで検知しました。")
+                    logging.info(f"Botの発言を'{TARGET_CHANNEL_NAME_FOR_LINKS}'で検知しました。")
 
                     try:
                         guild = message.guild
                         current_category = message.channel.category
                         if not current_category:
-                            logging.warning("リンク置き場がカテゴリに属していません。")
+                            logging.warning("base-linkがカテゴリーに属していません。")
                             return
 
-                        # --- 1. upチャンネルの連番を探す ---
+                        # カテゴリー名によって接頭辞(prefix)を判定
+                        if "up" in current_category.name.lower():
+                            prefix = "up"
+                        elif "ことら" in current_category.name:
+                            prefix = "kotora"
+                        else:
+                            # どちらでもない場合はupをデフォルトにするか、必要に応じて追加
+                            prefix = "up"
+
+                        # --- 1. カテゴリー内のチャンネルから連番を探す ---
                         max_num = 0
                         for ch in current_category.text_channels:
-                            m = re.match(r"^up(\d+)$", ch.name, re.IGNORECASE)
+                            m = re.match(rf"^{re.escape(prefix)}(\d+)$", ch.name, re.IGNORECASE)
                             if m:
                                 num = int(m.group(1))
                                 max_num = max(max_num, num)
-                        new_channel_name = f"up{max_num + 1}"
+                        new_channel_name = f"{prefix}{max_num + 1}"
 
-                        # --- 2. 同名チャンネル存在チェック ---
-                        if discord.utils.get(current_category.text_channels, name=new_channel_name):
-                            logging.warning(f"同名のチャンネル '{new_channel_name}' が既に存在します。")
-                            return
+                        # --- 2. チャンネル作成とリンク送信 ---
+                        if not discord.utils.get(current_category.text_channels, name=new_channel_name):
+                            new_channel = await guild.create_text_channel(new_channel_name, category=current_category)
+                            original_link = message.jump_url
+                            sent_msg = await new_channel.send(original_link)
+                            
+                            # 元のbase-linkへ作成したチャンネルのリンクを貼る
+                            return_link = sent_msg.jump_url
+                            await message.channel.send(return_link)
+                            logging.info(f"新チャンネル '{new_channel.name}' を作成しリンクを送信しました。")
 
-                        # --- 3. upチャンネル作成 ---
-                        new_channel = await guild.create_text_channel(new_channel_name, category=current_category)
-                        logging.info(f"チャンネル '{new_channel.name}' を作成しました。")
-
-                        # --- 4. 元メッセージのリンクをupチャンネルに送信 ---
-                        original_link = message.jump_url
-                        sent_msg = await new_channel.send(original_link)
-                        logging.info(f"メッセージリンクを '{new_channel.name}' に送信しました。")
-
-                        # --- 5. 同じリンクをリンク置き場にも送信 ---
-                        return_link = sent_msg.jump_url
-                        await message.channel.send(return_link)
-                        logging.info(f"'{message.channel.name}' へリンクを返信しました。")
-
-                    except discord.errors.Forbidden:
-                        logging.error("エラー: 権限不足（カテゴリ/チャンネル作成、メッセージ送信など）。")
                     except Exception as e:
-                        logging.error(f"リンク置き場連携機能で予期せぬエラー: {e}", exc_info=True)
+                        logging.error(f"リンク置き場連携機能でエラー: {e}", exc_info=True)
 
                     return
-                # --- ▲▲▲ 【追加】リンク置き場チャンネルでTARGET_BOTが発言したら応答するロジック ▲▲▲ ---
+                # --- ▲▲▲ 【修正】リンク置き場(base-link)チャンネルの応答ロジック ▲▲▲ ---
 
 
                 # --- 既存の機能：ボットへのメンションに反応するロジック ---
@@ -296,7 +270,7 @@ def run_bot():
 
                 command_text = match.group(1).strip()
 
-                # 日付コマンドの処理 ("M/D" または "M/D day:N")
+                # 日付コマンドの処理
                 date_pattern = r'(\d{1,2})/(\d{1,2})(?:\s+day:(\d+))?'
                 date_match = re.fullmatch(date_pattern, command_text, re.IGNORECASE)
 
@@ -305,7 +279,6 @@ def run_bot():
                         month_str = date_match.group(1)
                         day_str = date_match.group(2)
                         date_str = f"{month_str}/{day_str}"
-
                         days_str = date_match.group(3)
                         days_to_show = int(days_str) if days_str else 7
 
@@ -325,23 +298,18 @@ def run_bot():
                             for emoji in REACTION_EMOJIS:
                                 await sent_message.add_reaction(emoji)
                         return
-                    except (ValueError, IndexError):
-                        await message.channel.send(f"コマンドの形式が正しくありません: `{command_text}`")
+                    except Exception:
+                        await message.channel.send(f"エラーが発生しました。")
                         return
 
-                # 数字リアクションコマンド
+                # 数字リアクション
                 num_match = re.fullmatch(r'num:(\d+)', command_text, re.IGNORECASE)
                 if num_match:
-                    try:
-                        count = int(num_match.group(1))
-                        if 1 <= count <= 10:
-                            for i in range(count):
-                                await message.add_reaction(NUMBER_EMOJIS[i])
-                        else:
-                            await message.channel.send("数字は1から10の間で指定してください。")
-                        return
-                    except (ValueError, IndexError):
-                        pass
+                    count = int(num_match.group(1))
+                    if 1 <= count <= 10:
+                        for i in range(count):
+                            await message.add_reaction(NUMBER_EMOJIS[i])
+                    return
 
                 # デフォルトのリアクション
                 if command_text == "":
@@ -353,7 +321,6 @@ def run_bot():
 
         except Exception as e:
             logging.error(f"ボットの実行中にエラーが発生: {e}", exc_info=True)
-            logging.info("10秒後に再起動します。")
             time.sleep(10)
 
 # --- メインの実行ブロック ---
