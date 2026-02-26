@@ -182,6 +182,12 @@ def run_bot():
                             if player_role:
                                 overwrites[player_role] = discord.PermissionOverwrite(read_messages=True, send_messages=True)
                             
+                            # builderロールの取得と設定を追加
+                            builder_role = discord.utils.get(guild.roles, name="builder")
+                            if builder_role:
+                                overwrites[builder_role] = discord.PermissionOverwrite(read_messages=True, send_messages=True)
+                            # -----------------------
+
                             category = await guild.create_category(category_name, overwrites=overwrites)
                             logging.info(f"プライベートカテゴリ '{category_name}' を作成しました。")
 
