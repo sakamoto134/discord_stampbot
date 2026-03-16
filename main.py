@@ -170,6 +170,12 @@ def run_bot():
                         guild = message.guild
                         command_time = message.created_at.astimezone(JST)
 
+                        # ▼ コマンド実行者の名前から頭文字2文字を取得
+                        suffix = ""
+                        if message.interaction and message.interaction.user:
+                            user_name = message.interaction.user.name
+                            suffix = f"-{user_name[:2].lower()}"
+
                         category_name = command_time.strftime("%B").lower()
                         category = discord.utils.get(guild.categories, name=category_name)
 
@@ -195,7 +201,9 @@ def run_bot():
                             if m:
                                 num = int(m.group(1))
                                 max_num = max(max_num, num)
-                        new_channel_name = f"{prefix}{max_num + 1}"
+                        
+                        # ▼ 番号の後にsuffixを付与
+                        new_channel_name = f"{prefix}{max_num + 1}{suffix}"
 
                         if not discord.utils.get(category.text_channels, name=new_channel_name):
                             new_channel = await guild.create_text_channel(new_channel_name, category=category)
