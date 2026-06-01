@@ -110,7 +110,7 @@ def run_bot():
                             mentions = " ".join(role.mention for role in found_roles)
                             message_text = (
                                 f"【出欠投票】 {mentions}\n"
-                                "21:00~25:00辺りに可能なら投票\n"
+                                "昼：14:00~18:00 夜：21:00~25:00辺りに可能なら投票\n"
                                 "（細かい時間の可否は各自連絡）"
                             )
                             await channel.send(message_text)
