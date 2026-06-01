@@ -91,7 +91,16 @@ def run_bot():
                 logging.info("定期実行タスク: 週間予定の投稿を開始します。")
 
                 for guild in client.guilds:
+                    # チャンネル名に設定名が含まれているか確認 (☀️マーク対応のため部分一致か、同名を取得)
                     channel = discord.utils.get(guild.text_channels, name=SCHEDULE_CHANNEL_NAME)
+                    
+                    # ☀️マークが付いているチャンネル名も考慮する場合のフォールバック
+                    if not channel:
+                        for ch in guild.text_channels:
+                            if SCHEDULE_CHANNEL_NAME in ch.name:
+                                channel = ch
+                                break
+
                     roles_to_mention = [discord.utils.get(guild.roles, name=name) for name in SCHEDULE_MENTION_ROLES]
                     found_roles = [role for role in roles_to_mention if role is not None]
 
@@ -106,13 +115,31 @@ def run_bot():
                             )
                             await channel.send(message_text)
 
+                            has_sun_mark = "☀️" in channel.name
                             start_date = datetime.now(JST).date() + timedelta(days=5)
+                            
                             for i in range(7):
                                 current_date = start_date + timedelta(days=i)
-                                date_text = f"{current_date.month}/{current_date.day}({WEEKDAYS_JP[current_date.weekday()]})"
-                                sent_message = await channel.send(date_text)
-                                for emoji in REACTION_EMOJIS:
-                                    await sent_message.add_reaction(emoji)
+                                weekday_idx = current_date.weekday()
+                                
+                                # ☀️マークがあり、かつ土日(5=土, 6=日)の場合は昼と夜に分ける
+                                if has_sun_mark and weekday_idx >= 5:
+                                    # 昼
+                                    date_text_noon = f"{current_date.month}/{current_date.day}({WEEKDAYS_JP[weekday_idx]}) 昼"
+                                    sent_message_noon = await channel.send(date_text_noon)
+                                    for emoji in REACTION_EMOJIS:
+                                        await sent_message_noon.add_reaction(emoji)
+                                    
+                                    # 夜
+                                    date_text_night = f"{current_date.month}/{current_date.day}({WEEKDAYS_JP[weekday_idx]}) 夜"
+                                    sent_message_night = await channel.send(date_text_night)
+                                    for emoji in REACTION_EMOJIS:
+                                        await sent_message_night.add_reaction(emoji)
+                                else:
+                                    date_text = f"{current_date.month}/{current_date.day}({WEEKDAYS_JP[weekday_idx]})"
+                                    sent_message = await channel.send(date_text)
+                                    for emoji in REACTION_EMOJIS:
+                                        await sent_message.add_reaction(emoji)
                             logging.info(f"サーバー'{guild.name}'への週間予定の投稿が完了しました。")
 
                         except discord.errors.Forbidden:
@@ -270,12 +297,13 @@ def run_bot():
 
                 command_text = match.group(1).strip()
 
-                # 日付コマンド
-                date_match = re.fullmatch(r'(\d{1,2})/(\d{1,2})(?:\s+day:(\d+))?', command_text, re.IGNORECASE)
+                # 日付コマンド (noon をオプショナルとして追加検知)
+                date_match = re.fullmatch(r'(\d{1,2})/(\d{1,2})(?:\s+day:(\d+))?(?:\s+(noon))?', command_text, re.IGNORECASE)
                 if date_match:
                     try:
                         date_str = f"{date_match.group(1)}/{date_match.group(2)}"
                         days_to_show = int(date_match.group(3)) if date_match.group(3) else 7
+                        has_noon = bool(date_match.group(4)) # noonキーワードの有無
 
                         if not (1 <= days_to_show <= 10):
                              await message.channel.send("日数は1から10の間で指定してください。")
@@ -288,10 +316,26 @@ def run_bot():
 
                         for i in range(days_to_show):
                             current_date = start_date + timedelta(days=i)
-                            date_text = f"{current_date.month}/{current_date.day}({WEEKDAYS_JP[current_date.weekday()]})"
-                            sent_message = await message.channel.send(date_text)
-                            for emoji in REACTION_EMOJIS:
-                                await sent_message.add_reaction(emoji)
+                            weekday_idx = current_date.weekday()
+                            
+                            # noonの指定があり、かつ土日(5=土, 6=日)の場合は昼と夜に分ける
+                            if has_noon and weekday_idx >= 5:
+                                # 昼
+                                date_text_noon = f"{current_date.month}/{current_date.day}({WEEKDAYS_JP[weekday_idx]}) 昼"
+                                sent_message_noon = await message.channel.send(date_text_noon)
+                                for emoji in REACTION_EMOJIS:
+                                    await sent_message_noon.add_reaction(emoji)
+                                
+                                # 夜
+                                date_text_night = f"{current_date.month}/{current_date.day}({WEEKDAYS_JP[weekday_idx]}) 夜"
+                                sent_message_night = await message.channel.send(date_text_night)
+                                for emoji in REACTION_EMOJIS:
+                                    await sent_message_night.add_reaction(emoji)
+                            else:
+                                date_text = f"{current_date.month}/{current_date.day}({WEEKDAYS_JP[weekday_idx]})"
+                                sent_message = await message.channel.send(date_text)
+                                for emoji in REACTION_EMOJIS:
+                                    await sent_message.add_reaction(emoji)
                         return
                     except Exception:
                         await message.channel.send("エラーが発生しました。")
