@@ -2,6 +2,7 @@ import os
 import re
 import logging
 import time
+import random
 from datetime import datetime, timedelta, time as dtime, timezone
 from threading import Thread
 
@@ -296,6 +297,16 @@ def run_bot():
                     return
 
                 command_text = match.group(1).strip()
+
+                # --- ▼ 追加: ルーレット機能 ▼ ---
+                if "ルーレット" in command_text:
+                    members = ["anduu", "negi", "takenoko", "t.t.", "meteor", "sonson"]
+                    shuffled_members = random.sample(members, len(members))
+                    # 1.anduu 2.meteor のようなフォーマットで結合
+                    result_text = " ".join([f"{i+1}.{name}" for i, name in enumerate(shuffled_members)])
+                    await message.channel.send(result_text)
+                    return
+                # --- ▲ 追加: ルーレット機能 ▲ ---
 
                 # 日付コマンド (noon をオプショナルとして追加検知)
                 date_match = re.fullmatch(r'(\d{1,2})/(\d{1,2})(?:\s+day:(\d+))?(?:\s+(noon))?', command_text, re.IGNORECASE)
