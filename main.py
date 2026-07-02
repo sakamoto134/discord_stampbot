@@ -300,7 +300,7 @@ def run_bot():
 
                 # --- ▼ 追加: ルーレット機能 ▼ ---
                 if "ルーレット" in command_text:
-                    members = ["anduu", "negi", "takenoko", "t.t.", "meteor", "sonson"]
+                    members = ["anduu", "negi", "takenoko", "issa", "meteor", "sonson"]
                     shuffled_members = random.sample(members, len(members))
                     # 1.anduu 2.meteor のようなフォーマットで結合
                     result_text = " ".join([f"{i+1}.{name}" for i, name in enumerate(shuffled_members)])
