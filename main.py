@@ -214,7 +214,8 @@ def run_bot():
                             user_name = message.author.name
                             suffix = f"-{user_name[:2].lower()}"
 
-                        category_name = command_time.strftime("%B").lower()
+                        # ▼ 西暦-月名 (例: 2026-september) に変更
+                        category_name = command_time.strftime("%Y-%B").lower()
                         category = discord.utils.get(guild.categories, name=category_name)
 
                         if category is None:
