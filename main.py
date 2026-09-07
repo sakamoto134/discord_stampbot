@@ -28,9 +28,9 @@ SCHEDULE_CHANNEL_NAME = "attendance"       # 投稿先チャンネル
 SCHEDULE_MENTION_ROLES = ["player", "guest"] # メンションするロール
 
 # --- 機能2: sesh連携 ---
-SESH_BOT_ID = 616754792965865495           # seshボットのID
-SESH_TARGET_CHANNEL = "calender🗓️"         # 監視するチャンネル
-SESH_MENTION_ROLES = ["sesh"]              # create時にメンションするロール
+STAMP_BOT_ID = 616754792965865495           # stampボットのID
+STAMP_TARGET_CHANNEL = "calender🗓️"         # 監視するチャンネル
+STAMP_MENTION_ROLES = ["sesh"]              # create時にメンションするロール
 
 # --- 機能3: /baseコマンド連携 (未耐久 & リンク置き場) ---
 BASE_TARGET_BOT_ID = 824653933347209227    # 監視対象のボットID
@@ -165,8 +165,8 @@ def run_bot():
                     return
 
                 # --- ▼▼▼ sesh連携機能 ▼▼▼ ---
-                if (message.channel.name == SESH_TARGET_CHANNEL and
-                    message.author.id == SESH_BOT_ID and
+                if (message.channel.name == STAMP_TARGET_CHANNEL and
+                    message.author.id == STAMP_BOT_ID and
                     message.interaction is not None and
                     message.interaction.name == 'create' and
                     not message.interaction.user.bot):
@@ -174,7 +174,7 @@ def run_bot():
                     logging.info(f"seshのcreateコマンド応答を'{message.channel.name}'チャンネルで検知しました。")
                     try:
                         guild = message.guild
-                        roles_to_mention = [discord.utils.get(guild.roles, name=name) for name in SESH_MENTION_ROLES]
+                        roles_to_mention = [discord.utils.get(guild.roles, name=name) for name in STAMP_MENTION_ROLES]
                         found_roles = [role for role in roles_to_mention if role is not None]
 
                         if found_roles:
@@ -189,11 +189,13 @@ def run_bot():
                     return
 
                 # --- ▼▼▼ 未耐久チャンネル連携 (カテゴリ作成) ▼▼▼ ---
-                if (message.channel.name == BASE_TRIGGER_CHANNEL and
-                    message.author.id == BASE_TARGET_BOT_ID):
+                is_base_bot = (message.author.id == BASE_TARGET_BOT_ID)
+                is_stamp_bot_with_image = (message.author.id == STAMP_BOT_ID and len(message.attachments) > 0)
+
+                if message.channel.name == BASE_TRIGGER_CHANNEL and (is_base_bot or is_stamp_bot_with_image):
 
                     processed_messages.add(message.id)
-                    logging.info(f"Bot(ID:{BASE_TARGET_BOT_ID})の発言を'{message.channel.name}'で検知。")
+                    logging.info(f"指定Botの発言/画像を'{message.channel.name}'で検知。")
                     try:
                         guild = message.guild
                         command_time = message.created_at.astimezone(JST)
