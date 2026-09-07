@@ -28,7 +28,7 @@ SCHEDULE_CHANNEL_NAME = "attendance"       # 投稿先チャンネル
 SCHEDULE_MENTION_ROLES = ["player", "guest"] # メンションするロール
 
 # --- 機能2: sesh連携 ---
-STAMP_BOT_ID = 616754792965865495           # stampボットのID
+STAMP_BOT_ID = 616754792965865495           # seshボットのID
 STAMP_TARGET_CHANNEL = "calender🗓️"         # 監視するチャンネル
 STAMP_MENTION_ROLES = ["sesh"]              # create時にメンションするロール
 
@@ -189,21 +189,29 @@ def run_bot():
                     return
 
                 # --- ▼▼▼ 未耐久チャンネル連携 (カテゴリ作成) ▼▼▼ ---
+                # 対象のBotが発言した場合、またはユーザーが@stampbot(メンションか文字列)と画像付きで発言した場合
                 is_base_bot = (message.author.id == BASE_TARGET_BOT_ID)
-                is_stamp_bot_with_image = (message.author.id == STAMP_BOT_ID and len(message.attachments) > 0)
+                is_user_trigger = (
+                    not message.author.bot and
+                    ("@stampbot" in message.content or client.user.mentioned_in(message)) and
+                    len(message.attachments) > 0
+                )
 
-                if message.channel.name == BASE_TRIGGER_CHANNEL and (is_base_bot or is_stamp_bot_with_image):
+                if message.channel.name == BASE_TRIGGER_CHANNEL and (is_base_bot or is_user_trigger):
 
                     processed_messages.add(message.id)
-                    logging.info(f"指定Botの発言/画像を'{message.channel.name}'で検知。")
+                    logging.info(f"'{message.channel.name}'でチャンネル作成トリガーを検知しました。")
                     try:
                         guild = message.guild
                         command_time = message.created_at.astimezone(JST)
 
-                        # ▼ コマンド実行者の名前から頭文字2文字を取得
+                        # ▼ コマンド実行者（または発言者）の名前から頭文字2文字を取得
                         suffix = ""
-                        if message.interaction and message.interaction.user:
+                        if is_base_bot and message.interaction and message.interaction.user:
                             user_name = message.interaction.user.name
+                            suffix = f"-{user_name[:2].lower()}"
+                        elif is_user_trigger:
+                            user_name = message.author.name
                             suffix = f"-{user_name[:2].lower()}"
 
                         category_name = command_time.strftime("%B").lower()
@@ -290,6 +298,7 @@ def run_bot():
                     return
 
                 # --- 既存の機能：ボットへのメンション ---
+                # 未耐久チャンネルでのユーザーからのトリガーとして処理されなかった場合、ここ以降の処理を行う
                 if not client.user.mentioned_in(message):
                     return
 
